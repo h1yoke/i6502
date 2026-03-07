@@ -1,0 +1,12 @@
+# SPM
+.build/
+Package.resolved
+
+# Xcode & VSCode
+project.xcworkspace/
+xcshareddata/
+xcuserdata/
+.vscode/
+
+# etc
+.DS_Store
