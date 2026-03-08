@@ -26,14 +26,15 @@ TBD!
 
 ## i6502App
 
-App is featuring a live-reload 6502 assembly editor and optimized for iPad and MacOS
+i6502 app is featuring a live-reload 6502 assembly editor optimized for iPad and MacOS:
 
 ![Editor example](Resources/ipad-editor.png)
 
 ### Editor tab features:
-* Dismissable hexdump sheet
+* Dismissable hexdump inspector
 * Syntax highlight
 * Font size control
+* Light and dark themes
 
 ### Emulator tab TBD features:
 * Bytecode disassembler with debugger 

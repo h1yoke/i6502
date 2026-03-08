@@ -2,24 +2,24 @@ import i6502Assembler
 import SwiftUI
 
 struct EditorView: View {
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .defaultDark
     @AppStorage("FontSize") private var fontSize: Double = 14
     @State private var onSettings: Bool = false
 
-    @State private var _text: AttributedString = Self.applyHighlighting(Self.snakeGame)
+    @State private var _text: AttributedString = ""
     @State private var showInspector: Bool = true
 
     var body: some View {
         ZStack(alignment: .trailing) {
             TextEditor(text: .init(
                 get: { _text },
-                set: { _text = Self.applyHighlighting($0) }
+                set: { _text = applyHighlighting($0) }
             ))
             .autocorrectionDisabled()
             .keyboardIOSSpecific()
 
             if showInspector, UIDevice.current.userInterfaceIdiom != .phone {
                 HexdumpOverlayView(originalText: String(_text.characters))
-                    .frame(width: 500)
                     .transition(.move(edge: .trailing))
                     .padding([.trailing, .bottom], 12)
                     .ignoresSafeArea(.all, edges: [.trailing, .bottom])
@@ -32,7 +32,8 @@ struct EditorView: View {
                     })
             }
         }
-        .background(Color(red: 41 / 255.0, green: 42 / 255.0, blue: 47 / 255.0).ignoresSafeArea())
+        .onAppear { _text = applyHighlighting(Self.snakeGame) }
+        .background(appTheme.palette.backgroundPrimary.ignoresSafeArea())
         .font(.system(size: fontSize, design: .monospaced))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -55,31 +56,34 @@ struct EditorView: View {
             }
         }
         .settingsSheet(isPresented: $onSettings)
+        .onChange(of: appTheme) {
+            _text = applyHighlighting(_text)
+        }
     }
 
-    private static func applyHighlighting(_ string: AttributedString) -> AttributedString {
+    private func applyHighlighting(_ string: AttributedString) -> AttributedString {
         var newText = string
-        newText.foregroundColor = .white
+        newText.foregroundColor = appTheme.palette.foregroundPrimary
         return newText
             .highlightingMatches(
                 of: "\\.\\w*",
-                color: Color(red: 238 / 255.0, green: 129 / 255.0, blue: 176 / 255.0)
+                color: appTheme.palette.directives
             )
             .highlightingMatches(
                 of: "\\S*:",
-                color: Color(red: 105 / 255.0, green: 174 / 255.0, blue: 200 / 255.0)
+                color: appTheme.palette.labels
             )
             .highlightingMatches(
                 of: "\\$[0-9A-Fa-f]+",
-                color: Color(red: 214 / 255.0, green: 202 / 255.0, blue: 134 / 255.0)
+                color: appTheme.palette.literals
             )
             .highlightingMatches(
                 of: "\\b\\d+\\b",
-                color: Color(red: 214 / 255.0, green: 202 / 255.0, blue: 134 / 255.0)
+                color: appTheme.palette.literals
             )
             .highlightingMatches(
                 of: ";.*",
-                color: Color(red: 129 / 255.0, green: 140 / 255.0, blue: 151 / 255.0)
+                color: appTheme.palette.comments
             )
     }
 

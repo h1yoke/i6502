@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 extension View {
@@ -9,7 +10,8 @@ extension View {
 }
 
 private struct SettingsView: View {
-    @AppStorage("FontSize") var fontSize: Double = 14
+    @AppStorage("FontSize") private var fontSize: Double = 14
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .defaultDark
 
     var body: some View {
         NavigationStack {
@@ -17,10 +19,20 @@ private struct SettingsView: View {
                 Section(header: Text("Font configuration")) {
                     Stepper("Font Size: \(Int(fontSize))", value: $fontSize, in: 14 ... 20)
                 }
+                Section(header: Text("Appearance")) {
+
+                    Picker("Theme", selection: $appTheme) {
+                        Text("Default (Dark)").tag(AppTheme.defaultDark)
+                        Text("Default (Light)").tag(AppTheme.defaultLight)
+                        Text("Civic").tag(AppTheme.civic)
+                    }
+                }
             }
             .navigationTitle("Settings")
+            .onChange(of: appTheme) {
+                print(appTheme)
+            }
         }
-        .background(Color(red: 41 / 255.0, green: 42 / 255.0, blue: 47 / 255.0).ignoresSafeArea())
-        .colorScheme(.dark)
+        .background(appTheme.palette.backgroundPrimary.ignoresSafeArea())
     }
 }

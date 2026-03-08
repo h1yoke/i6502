@@ -2,6 +2,9 @@ import i6502Assembler
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .defaultDark
+    @AppStorage("ForcedDarkMode") private var forcedDarkMode: Bool = false
+
     var body: some View {
         TabView {
             Tab("Editor", systemImage: "pencil") {
@@ -18,8 +21,7 @@ struct ContentView: View {
                 Text("TBD!")
             }
         }
-        .environment(\.colorScheme, .dark)
-        .background(Color(red: 41 / 255.0, green: 42 / 255.0, blue: 47 / 255.0).ignoresSafeArea())
+        .background(appTheme.palette.backgroundPrimary.ignoresSafeArea())
     }
 }
 
