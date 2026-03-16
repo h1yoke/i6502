@@ -2,7 +2,7 @@
 // Protocol for pluggable devices such as monitors, keyboards, randomizers etc.
 public protocol PluggableDevice {
     // Device memory section start and end addresses
-    var addresses: ClosedRange<Int> { get set }
+    var addresses: ClosedRange<Int> { get }
 
     // Called at the start of CPU cycle and writes emitted values to assigned section
     func emit() -> [UInt8]
@@ -22,7 +22,24 @@ public final class Emulator {
     public private(set) var devices: [PluggableDevice] = []
     private var remainingCycles: Int = 0
 
-    public init(emulationMode: EmulationMode, devices: [PluggableDevice]) {
+    public init(
+        program: [UInt8],
+        emulationMode: EmulationMode = .instructionAccurate,
+        devices: [PluggableDevice]
+    ) {
+        try? state.memory.assign(at: 0x600 ... 0x600 + program.count - 1, program)
+
+        self.emulationMode = emulationMode
+        self.devices = devices
+    }
+
+    public init(
+        memory: [UInt8] = [0x00],
+        emulationMode: EmulationMode = .instructionAccurate,
+        devices: [PluggableDevice]
+    ) {
+        try? state.memory.assign(at: 0 ... memory.count - 1, memory)
+
         self.emulationMode = emulationMode
         self.devices = devices
     }
@@ -43,11 +60,11 @@ public final class Emulator {
 
         // handle devices emits
         for device in devices {
-            try nextState.memory.assign(at: device.addresses, device.emit())
+            try? nextState.memory.assign(at: device.addresses, device.emit())
         }
 
         // emulate operation timings
-        if remainingCycles != 0 {
+        if remainingCycles == 0 {
             remainingCycles = try nextState.cycleInstructionAccurate()
         }
 
@@ -60,6 +77,9 @@ public final class Emulator {
             }
             device.recieve(section: Array(nextState.memory[device.addresses]))
         }
+
+        state = nextState
+        remainingCycles -= 1
     }
 }
 
@@ -71,13 +91,13 @@ public enum EmulatorError: Error {
 
 extension Array {
     fileprivate mutating func assign(at range: ClosedRange<Int>, _ value: Self) throws {
-        guard [range].count == value.count else {
+        guard range.count == value.count else {
             throw EmulatorError.deviceError(
                 "Device emittable addresses [\(range)] are not compatible with ram [0..65535]"
             )
         }
         for i in range {
-            self[i] = value[i]
+            self[i] = value[i - range.lowerBound]
         }
     }
 }

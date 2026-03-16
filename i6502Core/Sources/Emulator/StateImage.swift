@@ -29,12 +29,12 @@ extension Emulator {
 
         public init() {
             self.init(
-                registerPC: 0,
-                registerSP: 0,
+                registerPC: 0x0600,
+                registerSP: 0xFF,
                 registerA: 0,
                 registerX: 0,
                 registerY: 0,
-                registerPS: 0,
+                registerPS: 0b0011_0000,
                 memory: Array(repeating: 0, count: 65_536)
             )
         }
@@ -45,39 +45,81 @@ extension Emulator {
 
 extension Emulator.ProcessorStatus {
     public var negative: Bool {
-        get { (self & (1 << 7)) == 1 }
-        set { self = self | (1 << 7) }
+        get { (self & 0b1000_0000) >> 7 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 7)
+            } else {
+                self &= ~(1 << 7)
+            }
+        }
     }
 
     public var overflow: Bool {
-        get { (self & (1 << 6)) == 1 }
-        set { self = self | (1 << 6) }
+        get { (self & 0b1000000) >> 6 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 6)
+            } else {
+                self &= ~(1 << 6)
+            }
+        }
     }
 
     public var skip: Bool { true }
 
     public var `break`: Bool {
-        get { (self & (1 << 4)) == 1 }
-        set { self = self | (1 << 4) }
+        get { (self & 0b10000) >> 4 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 4)
+            } else {
+                self &= ~(1 << 4)
+            }
+        }
     }
 
     public var decimal: Bool {
-        get { (self & (1 << 3)) == 1 }
-        set { self = self | (1 << 3) }
+        get { (self & 0b1000) >> 3 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 3)
+            } else {
+                self &= ~(1 << 3)
+            }
+        }
     }
 
     public var interrupt: Bool {
-        get { (self & (1 << 3)) == 1 }
-        set { self = self | (1 << 2) }
+        get { (self & 0b100) >> 2 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 2)
+            } else {
+                self &= ~(1 << 2)
+            }
+        }
     }
 
     public var zero: Bool {
-        get { (self & (1 << 3)) == 1 }
-        set { self = self | (1 << 1) }
+        get { (self & 0b10) >> 1 == 1 }
+        set {
+            if newValue {
+                self |= (1 << 1)
+            } else {
+                self &= ~(1 << 1)
+            }
+        }
     }
 
     public var carry: Bool {
-        get { (self & (1 << 3)) == 1 }
-        set { self = self | 1 }
+        get { (self & 0b1) == 1 }
+        set {
+            if newValue {
+                self |= (1 << 0)
+            } else {
+                self &= ~(1 << 0)
+            }
+        }
     }
 }

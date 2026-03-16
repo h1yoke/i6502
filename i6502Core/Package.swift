@@ -26,7 +26,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "i6502CLI",
-            dependencies: ["i6502Assembler"],
+            dependencies: ["i6502Assembler", "i6502Emulator"],
             path: "Sources/Main"
         ),
         .target(

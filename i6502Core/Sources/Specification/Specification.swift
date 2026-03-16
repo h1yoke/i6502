@@ -401,7 +401,7 @@ public enum Specification {
 
         .init(.asl, .accumulator): 0x0A,
         .init(.asl, .zeroPage): 0x06,
-        .init(.asl, .zeroPageX): 0x15,
+        .init(.asl, .zeroPageX): 0x16,
         .init(.asl, .absolute): 0x0E,
         .init(.asl, .absoluteX): 0x1E,
 
@@ -572,4 +572,11 @@ public enum Specification {
     public static func translate(op: Operation) -> UInt8? {
         bytecodes[op]
     }
+}
+
+public enum MemoryAccessPattern {
+    case read
+    case write
+    case readModifyWrite
+    case noAccess
 }

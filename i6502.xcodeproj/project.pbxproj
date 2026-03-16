@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8A0B0C2A2F6703CC00A3B562 /* i6502Emulator in Frameworks */ = {isa = PBXBuildFile; productRef = 8A0B0C292F6703CC00A3B562 /* i6502Emulator */; };
 		8A0CE2692F5A2ADE002AC240 /* i6502Assembler in Frameworks */ = {isa = PBXBuildFile; productRef = 8A0CE2682F5A2ADE002AC240 /* i6502Assembler */; };
 		8A0CE26B2F5A2ADE002AC240 /* i6502Specification in Frameworks */ = {isa = PBXBuildFile; productRef = 8A0CE26A2F5A2ADE002AC240 /* i6502Specification */; };
 		8AC0F45B2F5C8283002FF0F7 /* readme.md in Resources */ = {isa = PBXBuildFile; fileRef = 8AC0F45A2F5C827D002FF0F7 /* readme.md */; };
@@ -38,12 +39,20 @@
 			files = (
 				8A0CE2692F5A2ADE002AC240 /* i6502Assembler in Frameworks */,
 				8A0CE26B2F5A2ADE002AC240 /* i6502Specification in Frameworks */,
+				8A0B0C2A2F6703CC00A3B562 /* i6502Emulator in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8A0B0C282F6703CC00A3B562 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8A0CE24C2F5A2A42002AC240 = {
 			isa = PBXGroup;
 			children = (
@@ -52,6 +61,7 @@
 				8A0CE2632F5A2A6B002AC240 /* i6502Core */,
 				8AC0F45A2F5C827D002FF0F7 /* readme.md */,
 				8AC0F45C2F5C8338002FF0F7 /* Resources */,
+				8A0B0C282F6703CC00A3B562 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -86,6 +96,7 @@
 			packageProductDependencies = (
 				8A0CE2682F5A2ADE002AC240 /* i6502Assembler */,
 				8A0CE26A2F5A2ADE002AC240 /* i6502Specification */,
+				8A0B0C292F6703CC00A3B562 /* i6502Emulator */,
 			);
 			productName = i6502;
 			productReference = 8A0CE2552F5A2A42002AC240 /* i6502.app */;
@@ -381,6 +392,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		8A0B0C292F6703CC00A3B562 /* i6502Emulator */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = i6502Emulator;
+		};
 		8A0CE2682F5A2ADE002AC240 /* i6502Assembler */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = i6502Assembler;
