@@ -15,7 +15,7 @@ struct HexdumpOverlayView: View {
             .backgroundiOSSpecific()
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
             )
             .clipped()
             .shadow(radius: 10)
