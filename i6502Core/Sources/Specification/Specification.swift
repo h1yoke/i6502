@@ -573,10 +573,3 @@ public enum Specification {
         bytecodes[op]
     }
 }
-
-public enum MemoryAccessPattern {
-    case read
-    case write
-    case readModifyWrite
-    case noAccess
-}

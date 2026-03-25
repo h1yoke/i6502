@@ -1,5 +1,6 @@
 import i6502Emulator
 import SwiftUI
+import UIKit
 
 // emits a random byte value
 class RandomizerDevice: PluggableDevice {
@@ -27,14 +28,18 @@ class KeyboardDevice: PluggableDevice {
 }
 
 struct EmulatorView: View {
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .defaultDark
+
     @State private var monitor: [UInt8]
     @State private var keyboard: KeyboardDevice
     @State private var randomizer: RandomizerDevice
     @State private var emulator: Emulator
 
     @State private var reset: Bool = false
+    @State private var clock: Double = 0.7
 
-    let pixelSize: CGFloat = 20
+    @State private var showInspector: Bool = false
+
     let cyclesPerFrame = 16_667 // 1 MHz
     let program: [UInt8]
 
@@ -51,70 +56,68 @@ struct EmulatorView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.gray.ignoresSafeArea()
+        GeometryReader { proxy in
+            let pixelSize = min(proxy.size.width, proxy.size.height) / 32
 
-            TimelineView(.animation) { timeline in
-                Canvas { context, _ in
-                    for i in 0 ..< 1_024 {
-                        let x = CGFloat(i % 32) * pixelSize
-                        let y = CGFloat(i / 32) * pixelSize
-                        let rect = CGRect(x: x, y: y, width: pixelSize, height: pixelSize)
-                        let color: Color = monitor[i] != 0 ? .white : .black
-                        context.fill(Path(rect), with: .color(color))
-                    }
-                }
-                .frame(width: 32 * pixelSize, height: 32 * pixelSize)
-                .onChange(of: timeline.date) {
-                    if reset {
-                        emulator = Emulator(
-                            program: program,
-                            emulationMode: .instructionAccurate,
-                            devices: [randomizer, keyboard]
-                        )
-                        reset = false
-                    } else {
-                        // unthrottling CPU from 60Hz to 1MHz clock rate
-                        for _ in 0 ..< cyclesPerFrame / 80 {
-                            try? emulator.cycle()
+            ZStack {
+                appTheme.palette.backgroundPrimary.ignoresSafeArea()
+
+                TimelineView(.animation) { timeline in
+                    Canvas { context, _ in
+                        for i in 0 ..< 1_024 {
+                            let x = CGFloat(i % 32) * pixelSize
+                            let y = CGFloat(i / 32) * pixelSize
+                            let rect = CGRect(x: x, y: y, width: pixelSize, height: pixelSize)
+                            let color: Color = monitor[i] != 0
+                                ? Color(red: 28 / 255.0, green: 206 / 255.0, blue: 29 / 255.0)
+                                : Color(red: 2 / 255.0, green: 2 / 255.0, blue: 2 / 255.0)
+
+                            context
+                                .fill(Path(rect), with: .color(color))
                         }
-                        // updating monitor only in 60Hz
-                        monitor = Array(emulator.state.memory[0x200 ... 0x5FF])
+                    }
+                    .frame(width: 32 * pixelSize, height: 32 * pixelSize)
+                    .layerEffect(
+                        ShaderLibrary.phosphorGlow(.float(8), .float(2.2)),
+                        maxSampleOffset: CGSize(width: 10, height: 10)
+                    )
+                    .colorEffect(
+                        ShaderLibrary.scanlines(.float(8.0), .float(0.2))
+                    )
+                    .distortionEffect(
+                        ShaderLibrary.crtDistortion(.boundingRect, .float(0.04)),
+                        maxSampleOffset: CGSize(width: 50, height: 50)
+                    )
+                    .onChange(of: timeline.date) {
+                        if reset {
+                            emulator = Emulator(
+                                program: program,
+                                emulationMode: .instructionAccurate,
+                                devices: [randomizer, keyboard]
+                            )
+                            reset = false
+                        } else {
+                            // unthrottling CPU from 60Hz to 1MHz clock rate
+                            for _ in 0 ..< cyclesPerFrame / 80 {
+                                try? emulator.cycle()
+                            }
+                            // updating monitor only in 60Hz
+                            monitor = Array(emulator.state.memory[0x200 ... 0x5FF])
+                        }
                     }
                 }
             }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            VStack {
-                Button { keyboard.pressed = 0x77 } label: {
-                    Text("W")
-                        .frame(width: 75, height: 75)
-                }
-                HStack {
-                    Button { keyboard.pressed = 0x61 } label: {
-                        Text("A")
-                            .frame(width: 75, height: 75)
-                    }
-                    Button { keyboard.pressed = 0x73 } label: {
-                        Text("S")
-                            .frame(width: 75, height: 75)
-                    }
-                    Button { keyboard.pressed = 0x64 } label: {
-                        Text("D")
-                            .frame(width: 75, height: 75)
-                    }
-                }
+            .overlay(alignment: .bottomLeading) {
+                DpadView { keyboard.pressed = $0 }
+                    .padding()
             }
-            .buttonStyle(.glass)
-            .padding()
-        }
-        .overlay(alignment: .bottomLeading) {
-            Button { reset = true } label: {
-                Text("RESET")
-                    .frame(width: 75, height: 75)
+            .overlay(alignment: .bottomTrailing) {
+                ButtonsView(
+                    reset: { reset = true },
+                    action: {}
+                )
+                .padding()
             }
-            .buttonStyle(.glass)
-            .padding()
         }
     }
 }

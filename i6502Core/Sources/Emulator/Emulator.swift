@@ -27,7 +27,9 @@ public final class Emulator {
         emulationMode: EmulationMode = .instructionAccurate,
         devices: [PluggableDevice]
     ) {
-        try? state.memory.assign(at: 0x600 ... 0x600 + program.count - 1, program)
+        if !program.isEmpty {
+            try? state.memory.assign(at: 0x600 ... 0x600 + program.count - 1, program)
+        }
 
         self.emulationMode = emulationMode
         self.devices = devices
