@@ -42,6 +42,11 @@ let package = Package(
         .target(
             name: "i6502Specification",
             path: "Sources/Specification"
+        ),
+        .testTarget(
+            name: "i6502Tests",
+            dependencies: ["i6502Specification", "i6502Assembler"],
+            path: "Tests"
         )
     ]
 )

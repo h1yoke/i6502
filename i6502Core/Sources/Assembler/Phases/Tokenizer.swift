@@ -2,200 +2,257 @@
 import Foundation
 import i6502Specification
 
-// *** Literals:
-// <number> := <hex_number> | <dec_number>
-//     <hex_number> := $<dec_number>
-//     <dec_number> := [0-9]+
-//
-// ** Root:
-// <label> := <label_name>:
-//     <label_name> := (_ | a-z | A-Z)[_ | a-z | A-Z | 0-9]*
-// <operation> := <op_code> <op_argument>
-//     <op_code> := case-insesitive 6502 opcode
-//     <op_argument> := <number_or_label> | A | #<number> | <number_or_label>,X
-//         | <number_or_label>,Y | (<number_or_label>,X) | (<number>),Y | (<number>) | none
-//     <number_or_label> := <number> | <label_name>
-//
-
 enum Tokenizer {
-    static func process(input: inout String) throws -> [Token] {
-        try processTokens(input: &input)
+    static func process(input: String) throws -> [Token] {
+        try processTokens(input: input)
     }
 }
 
 extension Tokenizer {
-    private static func processTokens(input: inout String) throws -> [Token] {
-        var currentAddress: UInt16 = 0x0600
+    fileprivate static func processTokens(input: String) throws -> [Token] {
+        var cursor = Cursor(input: input)
+        var currentAddress: UInt16 = 0x0000
         var tokens: [Token] = []
+        var defines: [String: Token.Number] = [:]
 
-        while !input.isEmpty {
-            input.takeAll(.whitespacesAndNewlines)
+        input.takeAll(.whitespacesAndNewlines, cursor: &cursor)
+        while cursor.globalPosition.utf16Offset(in: input) < input.count {
+            if input.takeComment(cursor: &cursor) {
+                input.takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                continue
 
-            if let byteDirective = try input.takeByteDirective() {
+            } else if let defineDirective = try input.takeDefineDirective(defines: defines, cursor: &cursor) {
+                defines[defineDirective.key] = defineDirective.value
+
+            } else if let orgDirective = try input.takeOrgDirective(defines: defines, cursor: &cursor) {
+                tokens.append(.org(orgDirective))
+                currentAddress = orgDirective
+
+            } else if let byteDirective = try input.takeByteDirective(defines: defines, cursor: &cursor) {
                 tokens.append(.byte(byteDirective))
                 currentAddress += 1
-            } else if let (_, opCode) = input.takeOperation() {
-                let operation = try processOperation(in: &input, code: opCode, address: currentAddress)
+
+            } else if let (_, code) = input.takeOperation(cursor: &cursor) {
+                let operation = try input.processOperation(
+                    code: code,
+                    address: currentAddress,
+                    defines: defines,
+                    cursor: &cursor
+                )
+
+                guard Specification.allowedModes[operation.code]?
+                    .contains(operation.argument.toAddressingMode()) ?? false
+                else {
+                    throw AssemblerError.tokenizerError(
+                        "\(cursor): \"\(operation.code)\" with \(operation.argument.toAddressingMode()) mode is illegal"
+                    )
+                }
+
                 tokens.append(.operation(operation))
                 currentAddress += operation.byteLength
+
             } else {
-                let labelDeclaration = try processLabelDeclaration(in: &input, address: currentAddress)
+                let labelDeclaration = try input.processLabelDeclaration(address: currentAddress, cursor: &cursor)
                 tokens.append(.labelDeclaration(labelDeclaration))
             }
+
+            input.takeAll(.whitespacesAndNewlines, cursor: &cursor)
         }
         return tokens
     }
+}
 
-    private static func processOperation(
-        in input: inout String,
+extension String {
+    fileprivate func processOperation(
         code: OperationCode,
-        address: UInt16
+        address: UInt16,
+        defines: [String: Token.Number],
+        cursor: inout Cursor
     ) throws -> Token.Operation {
-        input.takeAll(.whitespacesAndNewlines)
+        takeAll(.whitespacesAndNewlines, cursor: &cursor)
 
-        var probeNextToken = input
-        let nextToken = probeNextToken.takeUntil(.whitespacesAndNewlines.union(.init(charactersIn: ":")))
-        if OperationCode(rawValue: nextToken) != nil || probeNextToken.take(":") == ":" {
-            if Specification.allowedModes[code]?.contains(.implied) == true {
+        // try immediate operations
+        if take("#", cursor: &cursor) == "#" {
+            guard let value = try takeNumberOrDefine(defines: defines, cursor: &cursor) else {
+                throw AssemblerError.tokenizerError("\(cursor): expected a number or predefined constant")
+            }
+            guard case let .byte(byteValue) = value else {
+                throw AssemblerError.tokenizerError("\(cursor): only byte values allowed in immediate mode")
+            }
+            return .init(code: code, argument: .immediate(byteValue), address: address)
+        }
+
+        // try indirect operations
+        if take("(", cursor: &cursor) == "(" {
+            takeAll(.whitespacesAndNewlines, cursor: &cursor)
+
+            if let tryNumber = try? takeNumberOrDefine(defines: defines, cursor: &cursor) {
+                switch tryNumber {
+                case let .byte(value):
+                    if take(")", cursor: &cursor) == ")" {
+                        takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                        guard !take(",", cursor: &cursor).isEmpty else {
+                            throw AssemblerError
+                                .tokenizerError("\(cursor): expected indirect,Y addressing mode for byte value")
+                        }
+                        takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                        guard !take("y", cursor: &cursor).isEmpty else {
+                            throw AssemblerError
+                                .tokenizerError("\(cursor): expected indirect,Y addressing mode for byte value")
+                        }
+                        return .init(code: code, argument: .indirectY(value), address: address)
+                    }
+                    if take(",", cursor: &cursor) == "," {
+                        takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                        guard !take("x", cursor: &cursor).isEmpty else {
+                            throw AssemblerError
+                                .tokenizerError("\(cursor): expected indirect,X addressing mode for byte value")
+                        }
+                        takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                        guard !take(")", cursor: &cursor).isEmpty else {
+                            throw AssemblerError
+                                .tokenizerError("\(cursor): expected indirect,X addressing mode for byte value")
+                        }
+                        return .init(code: code, argument: .indirectX(value), address: address)
+                    }
+                    throw AssemblerError.tokenizerError("\(cursor): expected indirect X or Y addressing modes")
+
+                case .word:
+                    guard take(")", cursor: &cursor) == ")" else {
+                        throw AssemblerError
+                            .tokenizerError("\(cursor): expected indirect addressing mode for word value")
+                    }
+                    return .init(code: code, argument: .indirect(.number(tryNumber)), address: address)
+                }
+            }
+
+            guard let label = try? takeName(cursor: &cursor) else {
+                throw AssemblerError.tokenizerError("\(cursor): expected constant or label for indirect operation")
+            }
+            guard take(")", cursor: &cursor) == ")" else {
+                throw AssemblerError.tokenizerError("\(cursor): expected ')' after indirect label")
+            }
+            return .init(code: code, argument: .indirect(.label(label)), address: address)
+        }
+
+        // probe next token
+        var probingCursor = cursor
+        if let numberOrLabel = try? processNumberOrLabel(defines: defines, cursor: &probingCursor) {
+            // next token is label declaration - current op has no arguments
+            if case .label = numberOrLabel, take(":", cursor: &probingCursor) == ":" {
+                if Specification.accumulatorOperations.contains(code) {
+                    return .init(code: code, argument: .accumulator, address: address)
+                }
                 return .init(code: code, argument: .implied, address: address)
             }
-            return .init(code: code, argument: .accumulator, address: address)
-        }
-
-        if input.take("#") == "#" {
-            let tryNumber = input.takeNumber()
-            guard !tryNumber.isEmpty,
-                  let number = tryNumber.parseNumber(),
-                  case let .byte(value) = number
-            else {
-                throw AssemblerError.tokenizerError("'\(tryNumber)' is not a valid number!")
-            }
-            return .init(code: code, argument: .immediate(value), address: address)
-        }
-
-        if input.take("(") == "(" {
-            input.takeAll(.whitespacesAndNewlines)
-
-            let tryNumber = input.takeNumber()
-            input.takeAll(.whitespacesAndNewlines)
-            if !tryNumber.isEmpty, let number = tryNumber.parseNumber() {
-                switch number {
-                case let .byte(value):
-                    if input.take(")") == ")" {
-                        input.takeAll(.whitespacesAndNewlines)
-                        input.take(",")
-                        input.takeAll(.whitespacesAndNewlines)
-                        input.take("y")
-
-                        return .init(code: code, argument: .indirectY(value), address: address)
-                    } else if input.take(",") == "," {
-                        input.takeAll(.whitespacesAndNewlines)
-                        if input.take("x") == "x" {
-                            input.takeAll(.whitespacesAndNewlines)
-                            input.take(")")
-                            return .init(code: code, argument: .indirectX(value), address: address)
-                        } else {
-                            throw AssemblerError.tokenizerError("Expected 'X' for Indirect,X addressing mode")
-                        }
-                    } else {
-                        throw AssemblerError.tokenizerError("Expected ')', ','")
-                    }
-                case let .word(value):
-                    guard input.take(")") == ")" else {
-                        throw AssemblerError.tokenizerError("Expected Indirect adressing mode for value '\(tryNumber)'")
-                    }
-                    return .init(code: code, argument: .indirect(value), address: address)
+            // next token is operation - current op has no arguments
+            if case let .label(opCode) = numberOrLabel, OperationCode.allCases.map(\.rawValue).contains(opCode) {
+                if Specification.accumulatorOperations.contains(code) {
+                    return .init(code: code, argument: .accumulator, address: address)
                 }
-            } else {
-                throw AssemblerError.tokenizerError("Expected number after '('")
+                return .init(code: code, argument: .implied, address: address)
             }
-        } else {
-            let numberOrLabel = try processNumberOrLabel(in: &input)
-            if input.take(",") == "," {
-                input.takeAll(.whitespacesAndNewlines)
+            cursor = probingCursor
 
-                if input.take("x") == "x" {
+            if case .label("a") = numberOrLabel {
+                return .init(code: code, argument: .accumulator, address: address)
+            }
+
+            if take(",", cursor: &cursor) == "," {
+                takeAll(.whitespacesAndNewlines, cursor: &cursor)
+                if take("x", cursor: &cursor) == "x" {
                     return switch numberOrLabel {
                     case .label, .number(.word):
                         .init(code: code, argument: .absoluteX(numberOrLabel), address: address)
                     case let .number(.byte(value)):
                         .init(code: code, argument: .zeroPageX(value), address: address)
                     }
-                } else if input.take("y") == "y" {
+                }
+                if take("y", cursor: &cursor) == "y" {
                     return switch numberOrLabel {
                     case .label, .number(.word):
                         .init(code: code, argument: .absoluteY(numberOrLabel), address: address)
                     case let .number(.byte(value)):
                         .init(code: code, argument: .zeroPageY(value), address: address)
                     }
+                }
+                throw AssemblerError.tokenizerError("\(cursor): expected X or Y absolute/zero-page modes")
+            }
+
+            return switch numberOrLabel {
+            case let .label(value):
+                if Specification.branchingOperations.contains(code) {
+                    .init(code: code, argument: .relative(.label(value)), address: address)
                 } else {
-                    throw AssemblerError.tokenizerError("Expected 'X' or 'Y' after '('")
-                }
-            } else if case .label("A") = numberOrLabel {
-                return .init(code: code, argument: .accumulator, address: address)
-            } else {
-                return switch numberOrLabel {
-                case let .label(value):
-                    if Specification.branchingOperations.contains(code) {
-                        .init(code: code, argument: .relative(.label(value)), address: address)
-                    } else {
-                        .init(code: code, argument: .absolute(numberOrLabel), address: address)
-                    }
-                case .number(.word):
                     .init(code: code, argument: .absolute(numberOrLabel), address: address)
-                case let .number(.byte(value)):
-                    .init(code: code, argument: .zeroPage(value), address: address)
                 }
+            case .number(.word):
+                .init(code: code, argument: .absolute(numberOrLabel), address: address)
+            case let .number(.byte(value)):
+                .init(code: code, argument: .zeroPage(value), address: address)
             }
         }
+
+        // we've tried everything - default to implied addressing mode
+        if Specification.accumulatorOperations.contains(code) {
+            return .init(code: code, argument: .accumulator, address: address)
+        }
+        return .init(code: code, argument: .implied, address: address)
     }
 
-    private static func processNumberOrLabel(in input: inout String) throws -> Token.Operation.NumberOrUsedLabel {
-        let tryNumber = input.takeNumber()
-        if !tryNumber.isEmpty, let value = tryNumber.parseNumber() {
+    private func processNumberOrLabel(
+        defines: [String: Token.Number],
+        cursor: inout Cursor
+    ) throws -> Token.NumberOrUsedLabel {
+        if let tryNumber = try? takeNumber(cursor: &cursor),
+           let value = try tryNumber.parseNumber()
+        {
             return .number(value)
         }
-        let tryName = input.takeName()
-        if !tryName.isEmpty {
+
+        if let tryName = try? takeName(cursor: &cursor) {
+            if let resolvedValue = defines[tryName] {
+                return .number(resolvedValue)
+            }
             return .label(tryName)
         }
-        throw AssemblerError.compilerError("Expected number or label")
+        throw AssemblerError.tokenizerError("\(cursor): expected number or label")
     }
 
-    private static func processLabelDeclaration(
-        in input: inout String,
-        address: UInt16
+    fileprivate func processLabelDeclaration(
+        address: UInt16,
+        cursor: inout Cursor
     ) throws -> Token.DeclaredLabel {
-        let name = input.takeName()
-        guard !name.isEmpty, input.take(":") == ":" else {
+        let name = try takeName(cursor: &cursor)
+        guard !name.isEmpty, take(":", cursor: &cursor) == ":" else {
             if !name.isEmpty {
-                throw AssemblerError.compilerError("Unrecognized token '\(name)'")
-            } else {
-                throw AssemblerError.compilerError("Unrecognized token '\(input.takeUntil(.whitespacesAndNewlines))'")
+                throw AssemblerError.tokenizerError("\(cursor): unrecognized token \"\(name)\"")
             }
+            throw AssemblerError.tokenizerError("\(cursor): unexpected EOF")
         }
         return Token.DeclaredLabel(name: name, address: address)
     }
+
 }
 
-enum Token {
-    enum Number {
+enum Token: Equatable {
+    enum NumberOrUsedLabel: Equatable {
+        case number(Token.Number)
+        case label(String)
+    }
+
+    enum Number: Equatable {
         case byte(UInt8)
         case word(UInt16)
     }
 
-    struct DeclaredLabel {
+    struct DeclaredLabel: Equatable {
         let name: String
         let address: UInt16
     }
 
-    struct Operation {
-        enum NumberOrUsedLabel {
-            case number(Token.Number)
-            case label(String)
-        }
-
-        enum Argument {
+    struct Operation: Equatable {
+        enum Argument: Equatable {
             case immediate(UInt8)
             case zeroPage(UInt8)
             case zeroPageX(UInt8)
@@ -205,7 +262,7 @@ enum Token {
             case absoluteY(NumberOrUsedLabel)
             case indirectX(UInt8)
             case indirectY(UInt8)
-            case indirect(UInt16)
+            case indirect(NumberOrUsedLabel)
             case relative(NumberOrUsedLabel)
             case implied
             case accumulator
@@ -217,7 +274,7 @@ enum Token {
 
         var byteLength: UInt16 {
             // all op codes take exactly one byte
-            // lenght depends only on addressing mode
+            // length depends only on addressing mode
             switch argument {
             case .immediate: 2
             case .zeroPage, .zeroPageX, .zeroPageY: 2
@@ -233,34 +290,123 @@ enum Token {
     case labelDeclaration(Token.DeclaredLabel)
     case operation(Token.Operation)
     case byte(UInt8)
+    case org(UInt16)
 }
 
 extension String {
-    mutating func takeOperation() -> (String, OperationCode)? {
-        var copy = self
+    private func takeNumberOrDefine(defines: [String: Token.Number], cursor: inout Cursor) throws -> Token.Number? {
+        var copyCursor = cursor
+        if let constantNumber = try? takeNumber(cursor: &copyCursor) {
+            guard let parsedValue = try constantNumber.parseNumber() else {
+                throw AssemblerError.tokenizerError("\(copyCursor): expected a number, found \"\(constantNumber)\"")
+            }
+            cursor = copyCursor
+            return parsedValue
+        }
+        if let name = try? takeName(cursor: &copyCursor) {
+            guard let resolvedNumber = defines[name] else {
+                throw AssemblerError.tokenizerError("\(copyCursor): unrecognized constant \"\(name)\"")
+            }
+            cursor = copyCursor
+            return resolvedNumber
+        }
+        return nil
+    }
 
-        let token = copy.takeUntil(.whitespacesAndNewlines)
+    fileprivate func takeOperation(cursor: inout Cursor) -> (String, OperationCode)? {
+        var cursorCopy = cursor
+
+        let token = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
         guard let code = OperationCode(rawValue: token.lowercased()) else {
             return nil
         }
-        self = copy
+        cursor = cursorCopy
         return (token, code)
     }
-}
 
-extension String {
-    mutating func takeByteDirective() throws -> UInt8? {
-        var copy = self
+    fileprivate func takeComment(cursor: inout Cursor) -> Bool {
+        var cursorCopy = cursor
 
-        let token = copy.takeUntil(.whitespacesAndNewlines)
-        if token == ".byte" {
-            copy.takeAll(.whitespacesAndNewlines)
-            let argument = copy.takeUntil(.whitespacesAndNewlines)
+        if take(";", cursor: &cursorCopy) == ";" {
+            takeUntil(.newlines, cursor: &cursorCopy)
+            take(.newlines, cursor: &cursorCopy)
+            cursor = cursorCopy
+            return true
+        }
+        return false
+    }
 
-            guard case let .byte(value) = argument.parseNumber() else {
-                throw AssemblerError.tokenizerError("Expected a byte argument")
+    fileprivate func takeDefineDirective(
+        defines: [String: Token.Number],
+        cursor: inout Cursor
+    ) throws -> (key: String, value: Token.Number)? {
+        let reservedNames = Set(OperationCode.allCases.map(\.rawValue))
+            .union(["a", "x", "y", "org", "byte", "word", "define"])
+
+        var cursorCopy = cursor
+
+        let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
+        if nextToken == ".define" {
+            takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
+            let key = try takeName(cursor: &cursorCopy)
+            guard defines[key] == nil else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): invalid redefenition of \"\(key)\"")
             }
-            self = copy
+            guard !reservedNames.contains(key) else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): \"\(key)\" is reserved from definition")
+            }
+
+            takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
+            let number = try takeNumber(cursor: &cursorCopy)
+            guard let value = try number.parseNumber() else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): only numbers are allowed as define values")
+            }
+
+            cursor = cursorCopy
+            return (key: key, value: value)
+        }
+        return nil
+    }
+
+    fileprivate func takeOrgDirective(defines: [String: Token.Number], cursor: inout Cursor) throws -> UInt16? {
+        var cursorCopy = cursor
+
+        let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
+        if nextToken == ".org" {
+            takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
+            let argument = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
+
+            if case let .word(resolvedValue) = defines[argument] {
+                cursor = cursorCopy
+                return resolvedValue
+            }
+
+            guard case let .word(value) = try argument.parseNumber() else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): expected a word literal after \".org\"")
+            }
+            cursor = cursorCopy
+            return value
+        }
+        return nil
+    }
+
+    fileprivate func takeByteDirective(defines: [String: Token.Number], cursor: inout Cursor) throws -> UInt8? {
+        var cursorCopy = cursor
+
+        let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
+        if nextToken == ".byte" {
+            takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
+            let argument = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
+
+            if case let .byte(resolvedValue) = defines[argument] {
+                cursor = cursorCopy
+                return resolvedValue
+            }
+
+            guard case let .byte(value) = try argument.parseNumber() else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): expected a byte literal after \".byte\"")
+            }
+            cursor = cursorCopy
             return value
         }
         return nil
@@ -268,15 +414,24 @@ extension String {
 }
 
 extension String {
-    func parseNumber() -> Token.Number? {
+    // allowed:
+    //   - hexadecimal: byte ($00..$FF) or word ($0000..$FFFF)
+    //   - decimal: -128..255 (converts to uint8) or 256..65535 (converts to uint16)
+    func parseNumber() throws -> Token.Number? {
         let isHexidecimal = first == "$"
         guard let value = Int(isHexidecimal ? String(dropFirst()) : self, radix: isHexidecimal ? 16 : 10) else {
             return nil
         }
 
-        if isHexidecimal && count <= 3 || !isHexidecimal && value <= 0xFF {
-            return .byte(UInt8(value))
+        if isHexidecimal {
+            return count <= 3 ? .byte(UInt8(value)) : .word(UInt16(value))
         }
-        return .word(UInt16(value))
+        if -128 ..< 256 ~= value {
+            return .byte(UInt8(value < 0 ? 0x100 + value : value))
+        }
+        if 256 ..< 65_536 ~= value {
+            return .word(UInt16(value))
+        }
+        throw AssemblerError.tokenizerError("number is outside allowed range")
     }
 }

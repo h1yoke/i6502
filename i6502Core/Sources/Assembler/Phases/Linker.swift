@@ -1,56 +1,38 @@
 import i6502Specification
 
-enum Complier {
-    static func process(_ tokens: inout [Token]) throws -> [UInt8] {
+enum Linker {
+    static func process(_ tokens: inout [Token]) throws {
         try resolveLabelReferences(tokens: &tokens)
-        return try translateBytecode(tokens: tokens)
     }
 }
 
-extension Complier {
-    private static func translateBytecode(tokens: [Token]) throws -> [UInt8] {
-        try tokens.map {
-            switch $0 {
-            case let .operation(operation):
-                guard let opBytecode = Specification.translate(op: .init(
-                    operation.code,
-                    operation.argument.toAddressingMode()
-                )) else {
-                    throw AssemblerError.compilerError("Corresponding bytecode for '\(operation.code)' not found")
-                }
-
-                return [
-                    [opBytecode], operation.argument.value
-                ]
-                .flatMap { $0 }
-            case let .byte(byteDirective):
-                return [byteDirective]
-            default:
-                return nil
+extension Linker {
+    fileprivate static func resolveLabelReferences(tokens: inout [Token]) throws {
+        let labelKeysWithValues = tokens.compactMap {
+            if case let .labelDeclaration(label) = $0 {
+                return (label.name, label.address)
             }
+            return nil
         }
-        .compactMap { $0 }
-        .flatMap { $0 }
-    }
 
-    private static func resolveLabelReferences(tokens: inout [Token]) throws {
+        if let duplicates = Dictionary(grouping: labelKeysWithValues, by: \.0).first(where: { $1.count > 1 }) {
+            throw AssemblerError.linkerError("multiple declarations of label \"\(duplicates.key)\"")
+        }
+
         let labelAddresses: [String: UInt16] = Dictionary(
-            uniqueKeysWithValues: tokens.compactMap {
-                if case let .labelDeclaration(label) = $0 {
-                    return (label.name, label.address)
-                }
-                return nil
-            }
+            uniqueKeysWithValues: labelKeysWithValues
         )
 
         for (index, token) in tokens.enumerated() {
             if case let .operation(operation) = token {
                 switch operation.argument {
-                case let .absolute(numberOrUsedLabel), let .absoluteX(numberOrUsedLabel),
+                case let .absolute(numberOrUsedLabel),
+                     let .absoluteX(numberOrUsedLabel),
                      let .absoluteY(numberOrUsedLabel):
+
                     if case let .label(string) = numberOrUsedLabel {
                         guard let address = labelAddresses[string] else {
-                            throw AssemblerError.compilerError("Unrecognized label '\(string)'!")
+                            throw AssemblerError.linkerError("label \"\(string)\" was not resolved")
                         }
 
                         tokens[index] = .operation(.init(
@@ -60,9 +42,22 @@ extension Complier {
                         ))
                     }
 
+                case let .indirect(numberOrUsedLabel):
+                    if case let .label(string) = numberOrUsedLabel {
+                        guard let address = labelAddresses[string] else {
+                            throw AssemblerError.linkerError("label \"\(string)\" was not resolved")
+                        }
+
+                        tokens[index] = .operation(.init(
+                            code: operation.code,
+                            argument: .indirect(.number(.word(address))),
+                            address: operation.address
+                        ))
+                    }
+
                 case let .relative(.label(string)):
                     guard let address = labelAddresses[string] else {
-                        throw AssemblerError.compilerError("Unrecognized label '\(string)'!")
+                        throw AssemblerError.linkerError("label \"\(string)\" was not resolved")
                     }
                     let distance =
                         UInt8(bitPattern: Int8(Int(address) - Int(operation.address) - Int(operation.byteLength)))
@@ -72,6 +67,7 @@ extension Complier {
                         argument: .relative(.number(.byte(distance))),
                         address: operation.address
                     ))
+
                 default:
                     break
                 }
@@ -113,10 +109,10 @@ extension Token.Operation.Argument {
         case let .relative(.number(number)): number.toBytecode()
         case let .indirectX(value): [value]
         case let .indirectY(value): [value]
-        case let .indirect(value): [UInt8(value & 0x00FF), UInt8((value & 0xFF00) >> 8)]
+        case let .indirect(.number(number)): number.toBytecode()
         case .implied: []
         case .accumulator: []
-        default: fatalError()
+        default: []
         }
     }
 }

@@ -18,20 +18,22 @@ struct Main {
     }
 
     private static func hexDump(_ bytes: [UInt8]) {
-        print(
-            bytes
-                .enumerated()
-                .map { index, byte in
-                    var newLine = ""
-                    if index % 16 == 0 {
-                        if index != 0 {
-                            newLine += "\n"
-                        }
-                        newLine += String(format: "%.4x: ", 0x0600 + index)
-                    }
-                    return newLine + String(format: "%.2x", byte)
+        for (rowIndex, row) in bytes.chunked(into: 16).enumerated() {
+            if !row.allSatisfy({ $0 == 0 }) {
+                print(String(format: "%.4x: ", rowIndex * 16), terminator: "")
+                for col in row {
+                    print(String(format: "%.2x ", col), terminator: "")
                 }
-                .joined(separator: " ")
-        )
+                print()
+            }
+        }
+    }
+}
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
+        }
     }
 }

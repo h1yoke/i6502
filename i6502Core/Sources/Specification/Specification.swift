@@ -1,5 +1,5 @@
 
-public enum OperationCode: String, Codable, Hashable, Sendable {
+public enum OperationCode: String, Codable, Hashable, Sendable, CaseIterable {
     case adc // ADd with Carry
     case and // bitwise AND with accumulator
     case asl // Arithmetic Shift Left
@@ -321,6 +321,7 @@ extension Operation {
 
 public enum Specification {
     public static let branchingOperations: Set<OperationCode> = [.bpl, .bmi, .bvc, .bvs, .bcc, .bcs, .bne, .beq]
+    public static let accumulatorOperations: Set<OperationCode> = [.asl, .lsr, .rol, .ror]
 
     public static let allowedModes: [OperationCode: Set<AddressingMode>] = [
         .adc: [.immediate, .zeroPage, .zeroPageX, .absolute, .absoluteX, .absoluteY, .indirectX, .indirectY],
@@ -349,7 +350,7 @@ public enum Specification {
         .cld: [.implied],
         .sed: [.implied],
         .inc: [.zeroPage, .zeroPageX, .absolute, .absoluteX],
-        .jmp: [.absolute, .absolute, .absoluteX, .indirect],
+        .jmp: [.absolute, .indirect],
         .jsr: [.absolute],
         .lda: [.immediate, .zeroPage, .zeroPageX, .absolute, .absoluteX, .absoluteY, .indirectX, .indirectY],
         .ldx: [.immediate, .zeroPage, .zeroPageY, .absolute, .absoluteY],
@@ -366,6 +367,7 @@ public enum Specification {
         .dey: [.implied],
         .iny: [.implied],
         .rol: [.accumulator, .zeroPage, .zeroPageX, .absolute, .absoluteX],
+        .ror: [.accumulator, .zeroPage, .zeroPageX, .absolute, .absoluteX],
         .rti: [.implied],
         .rts: [.implied],
         .sbc: [.immediate, .zeroPage, .zeroPageX, .absolute, .absoluteX, .absoluteY, .indirectX, .indirectY],
