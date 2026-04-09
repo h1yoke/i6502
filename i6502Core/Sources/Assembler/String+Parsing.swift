@@ -3,16 +3,15 @@ import Foundation
 struct Cursor: CustomStringConvertible {
     var line: Int
     var position: Int
+    private(set) var globalPosition: Int
 
-    private(set) var globalPosition: String.Index
-
-    init(input: String) {
+    init(input: [Character]) {
         line = 0
         position = 0
-        globalPosition = .init(utf16Offset: 0, in: input)
+        globalPosition = 0
     }
 
-    fileprivate mutating func advance(_ input: String, for character: Character?) {
+    fileprivate mutating func advance(_ input: [Character], for character: Character?) {
         guard let character else {
             return
         }
@@ -22,10 +21,10 @@ struct Cursor: CustomStringConvertible {
         } else {
             position += 1
         }
-        globalPosition = input.index(globalPosition, offsetBy: 1)
+        globalPosition += 1
     }
 
-    fileprivate mutating func advance(_ input: String, for characters: String) {
+    fileprivate mutating func advance(_ input: [Character], for characters: [Character]) {
         characters.forEach { advance(input, for: $0) }
     }
 
@@ -34,7 +33,7 @@ struct Cursor: CustomStringConvertible {
     }
 }
 
-extension String {
+extension [Character] {
     @discardableResult
     func take(_ symbolSet: CharacterSet, cursor: inout Cursor) -> Character? {
         guard indices.contains(cursor.globalPosition) else {
@@ -52,21 +51,34 @@ extension String {
     }
 
     @discardableResult
+    func take(_ symbols: [Character], cursor: inout Cursor) -> [Character] {
+        guard indices.contains(cursor.globalPosition) else {
+            return [Character("")]
+        }
+
+        if self[cursor.globalPosition...].starts(with: symbols) {
+            cursor.advance(self, for: symbols)
+            return symbols
+        }
+        return [Character("")]
+    }
+
+    @discardableResult
     func take(_ symbols: String, cursor: inout Cursor) -> String {
         guard indices.contains(cursor.globalPosition) else {
             return ""
         }
 
-        if self[cursor.globalPosition...].hasPrefix(symbols) {
-            cursor.advance(self, for: symbols)
+        if self[cursor.globalPosition...].starts(with: symbols) {
+            cursor.advance(self, for: Array(symbols))
             return symbols
         }
         return ""
     }
 
     @discardableResult
-    func takeAll(_ set: CharacterSet, cursor: inout Cursor) -> String {
-        var taken = ""
+    func takeAll(_ set: CharacterSet, cursor: inout Cursor) -> [Character] {
+        var taken: [Character] = []
         while let ch = take(set, cursor: &cursor) {
             taken.append(ch)
         }
@@ -74,8 +86,8 @@ extension String {
     }
 
     @discardableResult
-    func takeUntil(_ set: CharacterSet, cursor: inout Cursor) -> String {
-        var taken = ""
+    func takeUntil(_ set: CharacterSet, cursor: inout Cursor) -> [Character] {
+        var taken: [Character] = []
         while indices.contains(cursor.globalPosition),
               let unicodeScalar = self[cursor.globalPosition].unicodeScalars.first,
               !set.contains(unicodeScalar)
@@ -88,7 +100,7 @@ extension String {
     }
 
     @discardableResult
-    func takeUntil(_ symbol: Character, cursor: inout Cursor) -> String {
+    func takeUntil(_ symbol: Character, cursor: inout Cursor) -> [Character] {
         takeUntil(.init(charactersIn: String(symbol)), cursor: &cursor)
     }
 }
@@ -101,8 +113,8 @@ extension CharacterSet {
     static let hexadecimalDigits: Self = .decimalDigits.union(.init(charactersIn: "acbdefABCDEF"))
 }
 
-extension String {
-    func takeName(cursor: inout Cursor) throws -> String {
+extension [Character] {
+    func takeName(cursor: inout Cursor) throws -> [Character] {
         var cursorCopy = cursor
 
         guard let firstLetter = take(.lettersUnderscore, cursor: &cursorCopy) else {
@@ -115,7 +127,7 @@ extension String {
         return [firstLetter] + takeAll(.word, cursor: &cursor)
     }
 
-    func takeNumber(cursor: inout Cursor) throws -> String {
+    func takeNumber(cursor: inout Cursor) throws -> [Character] {
         let prefix = take("$", cursor: &cursor)
         if prefix.isEmpty {
             let digits = takeAll(.decimalMinus, cursor: &cursor)

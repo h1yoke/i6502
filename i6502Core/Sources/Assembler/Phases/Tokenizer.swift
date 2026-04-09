@@ -10,37 +10,23 @@ enum Tokenizer {
 
 extension Tokenizer {
     fileprivate static func processTokens(input: String) throws -> [Token] {
+        let input: [Character] = Array(input)
         var cursor = Cursor(input: input)
         var currentAddress = 0x0000
         var tokens: [Token] = []
-        var defines: [String: Token.Number] = [:]
+        var defines: [[Character]: Token.Number] = [:]
 
         input.takeAll(.whitespacesAndNewlines, cursor: &cursor)
-        while cursor.globalPosition.utf16Offset(in: input) < input.count {
+        while cursor.globalPosition < input.count {
             guard currentAddress < 65_536 else {
                 throw AssemblerError.tokenizerError(
-                    "address \(String(format: "$%.4x", currentAddress)) is out of bounds"
+                    "\(cursor): address \(String(format: "$%.4x", currentAddress)) is out of bounds"
                 )
             }
 
             if input.takeComment(cursor: &cursor) {
                 input.takeAll(.whitespacesAndNewlines, cursor: &cursor)
                 continue
-
-            } else if let defineDirective = try input.takeDefineDirective(defines: defines, cursor: &cursor) {
-                defines[defineDirective.key] = defineDirective.value
-
-            } else if let orgDirective = try input.takeOrgDirective(defines: defines, cursor: &cursor) {
-                tokens.append(.org(orgDirective))
-                currentAddress = Int(orgDirective)
-
-            } else if let byteDirective = try input.takeByteDirective(defines: defines, cursor: &cursor) {
-                tokens.append(.byte(byteDirective))
-                currentAddress += 1
-
-            } else if let wordDirective = try input.takeWordDirective(defines: defines, cursor: &cursor) {
-                tokens.append(.word(wordDirective))
-                currentAddress += 1
 
             } else if let (_, code) = input.takeOperation(cursor: &cursor) {
                 let operation = try input.processOperation(
@@ -61,6 +47,21 @@ extension Tokenizer {
                 tokens.append(.operation(operation))
                 currentAddress += Int(operation.byteLength)
 
+            } else if let defineDirective = try input.takeDefineDirective(defines: defines, cursor: &cursor) {
+                defines[defineDirective.key] = defineDirective.value
+
+            } else if let orgDirective = try input.takeOrgDirective(defines: defines, cursor: &cursor) {
+                tokens.append(.org(orgDirective))
+                currentAddress = Int(orgDirective)
+
+            } else if let byteDirective = try input.takeByteDirective(defines: defines, cursor: &cursor) {
+                tokens.append(.byte(byteDirective))
+                currentAddress += 1
+
+            } else if let wordDirective = try input.takeWordDirective(defines: defines, cursor: &cursor) {
+                tokens.append(.word(wordDirective))
+                currentAddress += 1
+
             } else {
                 let labelDeclaration = try input.processLabelDeclaration(
                     address: UInt16(currentAddress),
@@ -75,11 +76,11 @@ extension Tokenizer {
     }
 }
 
-extension String {
+extension [Character] {
     fileprivate func processOperation(
         code: OperationCode,
         address: UInt16,
-        defines: [String: Token.Number],
+        defines: [[Character]: Token.Number],
         cursor: inout Cursor
     ) throws -> Token.Operation {
         takeAll(.whitespacesAndNewlines, cursor: &cursor)
@@ -150,7 +151,7 @@ extension String {
             guard take(")", cursor: &cursor) == ")" else {
                 throw AssemblerError.tokenizerError("\(cursor): expected ')' after indirect label")
             }
-            return .init(code: code, argument: .indirect(.label(label)), address: address)
+            return .init(code: code, argument: .indirect(.label(String(label))), address: address)
         }
 
         // probe next token
@@ -164,7 +165,9 @@ extension String {
                 return .init(code: code, argument: .implied, address: address)
             }
             // next token is operation - current op has no arguments
-            if case let .label(opCode) = numberOrLabel, OperationCode.allCases.map(\.rawValue).contains(opCode) {
+            if case let .label(opCode) = numberOrLabel,
+               OperationCode.allCases.map(\.rawValue).contains(String(opCode))
+            {
                 if Specification.accumulatorOperations.contains(code) {
                     return .init(code: code, argument: .accumulator, address: address)
                 }
@@ -219,7 +222,7 @@ extension String {
     }
 
     private func processNumberOrLabel(
-        defines: [String: Token.Number],
+        defines: [[Character]: Token.Number],
         cursor: inout Cursor
     ) throws -> Token.NumberOrUsedLabel {
         if let tryNumber = try? takeNumber(cursor: &cursor),
@@ -232,7 +235,7 @@ extension String {
             if let resolvedValue = defines[tryName] {
                 return .number(resolvedValue)
             }
-            return .label(tryName)
+            return .label(String(tryName))
         }
         throw AssemblerError.tokenizerError("\(cursor): expected number or label")
     }
@@ -244,28 +247,32 @@ extension String {
         let name = try takeName(cursor: &cursor)
         guard !name.isEmpty, take(":", cursor: &cursor) == ":" else {
             if !name.isEmpty {
-                throw AssemblerError.tokenizerError("\(cursor): unrecognized token \"\(name)\"")
+                throw AssemblerError.tokenizerError("\(cursor): unrecognized token \"\(String(name))\"")
             }
             throw AssemblerError.tokenizerError("\(cursor): unexpected EOF")
         }
-        return Token.DeclaredLabel(name: name, address: address)
+        return Token.DeclaredLabel(name: String(name), address: address)
     }
 
 }
 
-extension String {
-    private func takeNumberOrDefine(defines: [String: Token.Number], cursor: inout Cursor) throws -> Token.Number? {
+extension [Character] {
+    private func takeNumberOrDefine(
+        defines: [[Character]: Token.Number],
+        cursor: inout Cursor
+    ) throws -> Token.Number? {
         var copyCursor = cursor
         if let constantNumber = try? takeNumber(cursor: &copyCursor) {
             guard let parsedValue = try constantNumber.parseNumber() else {
-                throw AssemblerError.tokenizerError("\(copyCursor): expected a number, found \"\(constantNumber)\"")
+                throw AssemblerError
+                    .tokenizerError("\(copyCursor): expected a number, found \"\(String(constantNumber))\"")
             }
             cursor = copyCursor
             return parsedValue
         }
         if let name = try? takeName(cursor: &copyCursor) {
             guard let resolvedNumber = defines[name] else {
-                throw AssemblerError.tokenizerError("\(copyCursor): unrecognized constant \"\(name)\"")
+                throw AssemblerError.tokenizerError("\(copyCursor): unrecognized constant \"\(String(name))\"")
             }
             cursor = copyCursor
             return resolvedNumber
@@ -273,11 +280,11 @@ extension String {
         return nil
     }
 
-    fileprivate func takeOperation(cursor: inout Cursor) -> (String, OperationCode)? {
+    fileprivate func takeOperation(cursor: inout Cursor) -> ([Character], OperationCode)? {
         var cursorCopy = cursor
 
         let token = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
-        guard let code = OperationCode(rawValue: token.lowercased()) else {
+        guard let code = OperationCode(rawValue: token.map { $0.lowercased() }.joined(separator: "")) else {
             return nil
         }
         cursor = cursorCopy
@@ -296,24 +303,25 @@ extension String {
         return false
     }
 
+    private static let reservedNames = Set(OperationCode.allCases.map(\.rawValue))
+        .union(["a", "x", "y", "org", "byte", "word", "define"])
+
     fileprivate func takeDefineDirective(
-        defines: [String: Token.Number],
+        defines: [[Character]: Token.Number],
         cursor: inout Cursor
-    ) throws -> (key: String, value: Token.Number)? {
-        let reservedNames = Set(OperationCode.allCases.map(\.rawValue))
-            .union(["a", "x", "y", "org", "byte", "word", "define"])
+    ) throws -> (key: [Character], value: Token.Number)? {
 
         var cursorCopy = cursor
 
         let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
-        if nextToken == ".define" {
+        if nextToken == Array(".define") {
             takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
             let key = try takeName(cursor: &cursorCopy)
             guard defines[key] == nil else {
-                throw AssemblerError.tokenizerError("\(cursorCopy): invalid redefenition of \"\(key)\"")
+                throw AssemblerError.tokenizerError("\(cursorCopy): invalid redefenition of \"\(String(key))\"")
             }
-            guard !reservedNames.contains(key) else {
-                throw AssemblerError.tokenizerError("\(cursorCopy): \"\(key)\" is reserved from definition")
+            guard !Self.reservedNames.contains(String(key)) else {
+                throw AssemblerError.tokenizerError("\(cursorCopy): \"\(String(key))\" is reserved from definition")
             }
 
             takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
@@ -328,11 +336,11 @@ extension String {
         return nil
     }
 
-    fileprivate func takeOrgDirective(defines: [String: Token.Number], cursor: inout Cursor) throws -> UInt16? {
+    fileprivate func takeOrgDirective(defines: [[Character]: Token.Number], cursor: inout Cursor) throws -> UInt16? {
         var cursorCopy = cursor
 
         let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
-        if nextToken == ".org" {
+        if nextToken == Array(".org") {
             takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
             let argument = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
 
@@ -350,11 +358,11 @@ extension String {
         return nil
     }
 
-    fileprivate func takeByteDirective(defines: [String: Token.Number], cursor: inout Cursor) throws -> UInt8? {
+    fileprivate func takeByteDirective(defines: [[Character]: Token.Number], cursor: inout Cursor) throws -> UInt8? {
         var cursorCopy = cursor
 
         let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
-        if nextToken == ".byte" {
+        if nextToken == Array(".byte") {
             takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
             let argument = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
 
@@ -372,11 +380,11 @@ extension String {
         return nil
     }
 
-    fileprivate func takeWordDirective(defines: [String: Token.Number], cursor: inout Cursor) throws -> UInt16? {
+    fileprivate func takeWordDirective(defines: [[Character]: Token.Number], cursor: inout Cursor) throws -> UInt16? {
         var cursorCopy = cursor
 
         let nextToken = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
-        if nextToken == ".word" {
+        if nextToken == Array(".word") {
             takeAll(.whitespacesAndNewlines, cursor: &cursorCopy)
             let argument = takeUntil(.whitespacesAndNewlines, cursor: &cursorCopy)
 
@@ -395,13 +403,13 @@ extension String {
     }
 }
 
-extension String {
+extension [Character] {
     // allowed:
     //   - hexadecimal: byte ($00..$FF) or word ($0000..$FFFF)
     //   - decimal: -128..255 (converts to uint8) or 256..65535 (converts to uint16)
     func parseNumber() throws -> Token.Number? {
         let isHexidecimal = first == "$"
-        guard let value = Int(isHexidecimal ? String(dropFirst()) : self, radix: isHexidecimal ? 16 : 10) else {
+        guard let value = Int(isHexidecimal ? String(dropFirst()) : String(self), radix: isHexidecimal ? 16 : 10) else {
             return nil
         }
 

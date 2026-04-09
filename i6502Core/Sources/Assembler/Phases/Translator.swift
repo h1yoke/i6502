@@ -13,19 +13,21 @@ extension Translator {
         var memory = [UInt8?](repeating: nil, count: 65_536)
 
         for token in tokens {
-            if case .org = token {} else {
+            switch token {
+            case let .labelDeclaration(label):
                 guard currentAddress < 65_536 else {
                     throw AssemblerError.translatorError(
-                        "address \(String(format: "$%.4x", currentAddress)) is out of bounds"
+                        "\"\(label.name)\" on address \(String(format: "$%.4x", currentAddress)) is out of bounds"
                     )
                 }
-            }
-
-            switch token {
-            case .labelDeclaration:
-                break
 
             case let .byte(byteValue):
+                guard currentAddress < 65_536 else {
+                    throw AssemblerError.translatorError(
+                        "\".byte\" on address \(String(format: "$%.4x", currentAddress)) is out of bounds"
+                    )
+                }
+
                 memory[currentAddress] = byteValue
                 currentAddress += 1
 
@@ -51,13 +53,17 @@ extension Translator {
                     )
                 }
 
+                let arguments = try operation.arguments()
+                guard currentAddress < 65_536 - arguments.count else {
+                    throw AssemblerError.translatorError(
+                        "\"\(operation.code.rawValue)\" in \(operation.argument.toAddressingMode()) mode on address \(String(format: "$%.4x", currentAddress)) is out of bounds"
+                    )
+                }
+
                 memory[currentAddress] = translatedOp
                 currentAddress += 1
-                for item in try operation.argument.value() {
+                for item in arguments {
                     memory[currentAddress] = item
-                    currentAddress += 1
-                }
-                if operation.code == .brk {
                     currentAddress += 1
                 }
             }
@@ -66,9 +72,9 @@ extension Translator {
     }
 }
 
-extension Token.Operation.Argument {
-    fileprivate func value() throws -> [UInt8] {
-        switch self {
+extension Token.Operation {
+    fileprivate func arguments() throws -> [UInt8?] {
+        switch argument {
         case let .immediate(value): [value]
         case let .zeroPage(value): [value]
         case let .zeroPageX(value): [value]
@@ -80,7 +86,7 @@ extension Token.Operation.Argument {
         case let .indirectX(value): [value]
         case let .indirectY(value): [value]
         case let .indirect(.number(number)): number.toBytecode()
-        case .implied: []
+        case .implied: code == .brk ? [nil] : []
         case .accumulator: []
         case let .absolute(.label(label)),
              let .absoluteX(.label(label)),
@@ -88,7 +94,7 @@ extension Token.Operation.Argument {
              let .indirect(.label(label)),
              let .relative(.label(label)):
             throw AssemblerError.translatorError(
-                "unresolved label \"\(label)\" reference in \(toAddressingMode()) mode"
+                "unresolved label \"\(label)\" reference in \(argument.toAddressingMode()) mode"
             )
         }
     }

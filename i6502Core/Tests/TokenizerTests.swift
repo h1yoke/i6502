@@ -1,5 +1,5 @@
-import Testing
 import i6502Specification
+import Testing
 @testable import i6502Assembler
 
 @Suite
@@ -125,6 +125,19 @@ struct TokenizerTests {
         }
     }
 
+    @Test("\".org\" on bounds")
+    func orgOnBounds() {
+        #expect(throws: Never.self, "parsed .org on bounds without errors") {
+            let tokens = try Tokenizer.process(
+                input: """
+                .org $FFFF
+                .org $1000
+                """
+            )
+            #expect(tokens == [.org(0xFFFF), .org(0x1000)], "tokens represent exactly \".org $1000\"")
+        }
+    }
+
     // MARK: - ".byte" tests
 
     @Test("\".byte\" hex")
@@ -164,6 +177,23 @@ struct TokenizerTests {
         }
     }
 
+    @Test("\".byte\" on $FFFF")
+    func byteOnFFFF() {
+        #expect(throws: Never.self, "parsed .byte without errors") {
+            let tokens = try Tokenizer.process(
+                input: """
+                .org $FFFF
+                .byte $30
+                """
+            )
+            let expectedTokens: [Token] = [
+                .org(0xFFFF),
+                .byte(0x30)
+            ]
+            #expect(tokens == expectedTokens, "tokens represent exactly \".byte $00\"")
+        }
+    }
+
     @Test("\".byte\" failing hex")
     func byteFailingHex() {
         #expect(throws: AssemblerError.tokenizerError("(0:10): expected a byte literal after \".byte\"")) {
@@ -194,6 +224,107 @@ struct TokenizerTests {
     func byteFailingUnknownDefine() {
         #expect(throws: AssemblerError.tokenizerError("(0:9): expected a byte literal after \".byte\"")) {
             try Tokenizer.process(input: ".byte RED")
+        }
+    }
+
+    @Test("\".byte\" failing out of bounds")
+    func byteFailingOutOfBounds() {
+        #expect(throws: AssemblerError.tokenizerError("(2:2): address $10000 is out of bounds")) {
+            try Tokenizer.process(
+                input: """
+                .org $FFFF
+                  .byte $FF
+                  .byte $AA
+                """
+            )
+        }
+    }
+
+    // MARK: - word tests
+
+    @Test("\".word\" hex")
+    func wordHex() {
+        #expect(throws: Never.self, "parsed .word without errors") {
+            let tokens = try Tokenizer.process(input: ".word $3010")
+            #expect(tokens == [.word(0x3010)], "tokens represent exactly \".word $3010\"")
+        }
+    }
+
+    @Test("\".word\" decimal")
+    func wordDecimal() {
+        #expect(throws: Never.self, "parsed .byte without errors") {
+            let tokens = try Tokenizer.process(input: ".word 256")
+            #expect(tokens == [.word(256)], "tokens represent exactly \".word 256\"")
+        }
+    }
+
+    @Test("\".word\" negative decimal")
+    func wordNegativeDecimal() {
+        #expect(throws: AssemblerError.tokenizerError("(0:8): expected a word literal after \".word\"")) {
+            try Tokenizer.process(input: ".word -1")
+        }
+    }
+
+    @Test("\".word\" define")
+    func wordDefine() {
+        #expect(throws: Never.self, "parsed .word without errors") {
+            let tokens = try Tokenizer.process(
+                input: """
+                .define RESET_HANDLER $0200
+                .word RESET_HANDLER
+                """
+            )
+            #expect(tokens == [.word(0x200)], "tokens represent exactly \".word $0200\"")
+        }
+    }
+
+    @Test("\".word\" on $FFFE")
+    func wordOnFFFE() {
+        #expect(throws: Never.self, "parsed .word without errors") {
+            let tokens = try Tokenizer.process(
+                input: """
+                .org $FFFE
+                .word $FFDD
+                """
+            )
+            let expectedTokens: [Token] = [
+                .org(0xFFFE),
+                .word(0xFFDD)
+            ]
+            #expect(tokens == expectedTokens, "tokens represent exactly \".word $FFDD\"")
+        }
+    }
+
+    @Test("\".word\" failing hex")
+    func wordFailingHex() {
+        #expect(throws: AssemblerError.tokenizerError("(0:9): expected a word literal after \".word\"")) {
+            try Tokenizer.process(input: ".word $FF")
+        }
+    }
+
+    @Test("\".word\" failing decimal")
+    func wordFailingDecimal() {
+        #expect(throws: AssemblerError.tokenizerError("(0:9): expected a word literal after \".word\"")) {
+            try Tokenizer.process(input: ".word 255")
+        }
+    }
+
+    @Test("\".word\" failing defined byte")
+    func wordFailingByteDefine() {
+        #expect(throws: AssemblerError.tokenizerError("(1:8): expected a word literal after \".word\"")) {
+            try Tokenizer.process(
+                input: """
+                .define f0 $F0
+                .word f0
+                """
+            )
+        }
+    }
+
+    @Test("\".word\" failing unknown define")
+    func wordFailingUnknownDefine() {
+        #expect(throws: AssemblerError.tokenizerError("(0:9): expected a word literal after \".word\"")) {
+            try Tokenizer.process(input: ".word NMI")
         }
     }
 
@@ -981,6 +1112,24 @@ struct TokenizerTests {
                 .operation(.init(code: .brk, argument: .implied, address: 0x0608))
             ]
             #expect(tokens == expectedTokens, "tokens represent actual program instructions")
+        }
+    }
+
+    @Test("\"misc\" very long (65536 bytes) program")
+    func miscLong() {
+        #expect(throws: Never.self, "parsed input without errors") {
+            try Tokenizer.process(
+                input: Array(repeating: "inx", count: 65_536).joined(separator: " ")
+            )
+        }
+    }
+
+    @Test("\"misc\" failing too long program")
+    func miscFailingTooLong() {
+        #expect(throws: AssemblerError.tokenizerError("(65536:0): address $10000 is out of bounds")) {
+            try Tokenizer.process(
+                input: Array(repeating: "nop", count: 65_537).joined(separator: "\n")
+            )
         }
     }
 }
