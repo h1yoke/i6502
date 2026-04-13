@@ -2,47 +2,115 @@
 
 A very basic imaginary computer with imaginary [MOS 6502](https://en.wikipedia.org/wiki/MOS_Technology_6502) in it
 
-![Simulator demo](Resources/snake.gif)
+![Simulator demo](Resources/demo.png)
 
 **List of contents:**
-* [i6502Core](#i6502Core) - 6502 Assembly & Emulator SPM package
-* [i6502App](#i6502App) - iPhone, iPad and MacOS standalone app based on i6502Core
+* [i6502App](#i6502App) - iPhone, iPad and MacOS standalone app based on core package
+* [i6502Core](#i6502Core) - Assembly & Emulator SPM package
 
 ## i6502Core
-
 ### Assembler
 
-Implements a tiny subset of [ca65](https://cc65.github.io/doc/ca65.html) assembler which is:
-* All [60 legal opcodes](https://www.6502.org/tutorials/6502opcodes.html) with their addressing modes
-* Label declaration and usage
-* Decimal and hexidecimal literals (with zero page and absolute addressing distinction `lda $0010` vs `lda $10`)
-* `.define` and single byte `.byte` assembler directives
-* Line comments that start on ';'
+Implements a tiny subset of [ca65](https://cc65.github.io/doc/ca65.html) assembler. All code is treated as case-insensitive (might be changed later). Internally process is split onto 3 phases: tokenizing, linking and translation and covered by corresponding [tests](/i6502Core/Tests/)
 
-![Assembler example](Resources/assembler-example.png)
+End goal was never to build a large scale IDE so probably no multi-files, C-lang macros, LLDB intermediate representation and other cool translator-nerdy stuff
 
-*For debug purposes i6502Core package has "Main" i6502CLI target that spits compiled hexdump result for given file input*
+<details>
+  <summary>Assembler programming reference</summary>
 
-### Simulator
+#### Operations
+All [56 legal opcodes](https://www.6502.org/tutorials/6502opcodes.html) with their addressing modes. Illegal ones (like LAX) are not supported but can be placed with `.byte`
 
-Implemented an emulator state machine that works with 60 opcodes (illegal are not supported yet):
+#### .define
+`.define YYYY $XXXX` binds YYYY name to $XXXX literal. Supports only name-to-constant binding
+
+#### .org
+`.org $XXXX` sets $XXXX as address for next instruction. May be used as a "raw" variant of `.section` since it is not supported
+
+#### .byte & .word
+`.byte $XX` places raw byte at current instruction address. Accepts decimal and hexadecimal values (even negative for 2's complement) in appropriate range
+
+`.word $XXXX` places raw word (two bytes) in little-endian into current instruction address. Accepts decimal and hexadecimal values (non-negative) in appropriate range
+
+#### Comments
+Line comments start at ';' till EOL
+
+#### Labels
+`YYYY:` sets a label to current instruction address. Supports both forward (declaration-after-use) and backward declaration (declaration-before-use). Resolved at linking stage to an actual memory address and can be used in all absolute, relative and indirect operations
+
+```asm
+routine_ref: .word $1000
+; ...
+jmp (routine_ref) ; will be resolved to address $1000
+```
+
+
+</details>
+
+#### Worth mentioning
+
+* Hexadecimal leading zeroes force absolute mode: `adc $10` vs `adc $0010`
+
+* For debug purposes i6502Core package has "Main" i6502CLI target that spits compiled hexdump result for given file input
+
+
+### Emulator
+
+6502 state machine interpreter / emulator
+
+Currently implemented an instruction-accurate emulation (all read-write-page_cross actions happen in one cpu cycle, then execution idles N-1 cycles)
+
+All memory and registers are filled with random bytes upon initialization, reset and interrupts are properly emulated by routing execution to according addresses at $FFFA-$FFFF
+
+<details>
+  <summary>How to use?</summary>
+
 ```Swift
-let program = try Assembler.compileBytes(input: "...")
-let simulator = Simulator(
-    program: program,
-    devices: [...]    // devices conforming PluggableDevice protocol emit values to memory
+// get 64KiB memory image from assembler
+let memory: [UInt8?] = try Assembler.compileBytes(input: "...")
+
+// initailize emulator
+var emulator = Emulator(
+    memory: memory,
+    devices: [...]
 )
 
+// signal RESET to cpu
+emulator.reset()
 while true {
-    try simulator.cycle()
+    emulator.cycle()
 }
 ```
+
+</details>
+
+<details>
+  <summary>Interrupt mapper in assembly</summary>
+
+```asm
+; Memory map
+.define NMI    $1000
+.define RESET  $2000
+.define IRQ    $3000
+
+; Bind interrupt handlers
+.org $FFFA
+    .word NMI    ; $FFFA-$FFFB: NMI handler address
+    .word RESET  ; $FFFC-$FFFD: RESET (program entry point) handler address
+    .word IRQ    ; $FFFE-$FFFF: IRQ/brk handler address
+
+.org RESET
+    ; your program here
+```
+
+</details>
+
 
 ## i6502App
 
 i6502 app is featuring a live-reload 6502 assembly editor optimized for iPad and MacOS:
 
-![Editor example](Resources/ipad-editor.png)
+![Editor example](Resources/snake.gif)
 
 ### Editor tab features:
 * Dismissable hexdump inspector

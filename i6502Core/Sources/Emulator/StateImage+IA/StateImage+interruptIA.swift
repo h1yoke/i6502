@@ -3,7 +3,7 @@ import i6502Specification
 
 extension Emulator.StateImage {
     // Executes non-maskable interruption in a "leading" cycle
-    public mutating func nmiInstructionAccurate() -> Int {
+    public func nmiInstructionAccurate() -> Int {
         // put PC on stack
         memory[Int(registerSP) + 0x100] = UInt8((registerPC & 0xFF00) >> 8)
         registerSP &-= 1
@@ -20,7 +20,7 @@ extension Emulator.StateImage {
     }
 
     // Executes maskable interruption in a "leading" cycle
-    public mutating func irqInstructionAccurate() -> Int {
+    public func irqInstructionAccurate() -> Int {
         // put PC on stack
         memory[Int(registerSP) + 0x100] = UInt8((registerPC & 0xFF00) >> 8)
         registerSP &-= 1
@@ -36,7 +36,7 @@ extension Emulator.StateImage {
         return 7
     }
 
-    public mutating func resetInstructionAccurate() -> Int {
+    public func resetInstructionAccurate() -> Int {
         // handle three dummy stack reads
         registerSP &-= 3
         // set I (interrupts disabled)

@@ -19,7 +19,7 @@ extension Emulator.StateImage {
         return (pcTarget, pcTarget & 0xFF00 != pcAfterBranch & 0xFF00)
     }
 
-    func fetchValue(_ op: i6502Specification.Operation) -> (value: UInt8, pageCrossed: Bool) {
+    func fetchValue(_ op: Specification.DecodedInstruction) -> (value: UInt8, pageCrossed: Bool) {
         switch op.mode {
         case .immediate:
             (immediate(), false)
@@ -46,7 +46,7 @@ extension Emulator.StateImage {
         }
     }
 
-    func fetchAddress(_ op: i6502Specification.Operation) -> UInt16 {
+    func fetchAddress(_ op: Specification.DecodedInstruction) -> UInt16 {
         switch op.mode {
         case .zeroPage:
             return UInt16(nextByte)
@@ -133,16 +133,14 @@ extension Emulator.StateImage {
     }
 }
 
-extension Array {
+extension UnsafeMutableBufferPointer {
     fileprivate subscript(_ index: UInt8) -> Element {
-        self[Int(index)]
-    }
-
-    fileprivate subscript(_ index: Int8) -> Element {
-        self[Int(UInt8(bitPattern: index))]
+        get { self[Int(index)] }
+        nonmutating set { self[Int(index)] = newValue }
     }
 
     fileprivate subscript(_ index: UInt16) -> Element {
-        self[Int(index)]
+        get { self[Int(index)] }
+        nonmutating set { self[Int(index)] = newValue }
     }
 }

@@ -2,8 +2,8 @@ import i6502Specification
 
 extension Emulator.StateImage {
     // Executes an operation that resolves operand both to a value and an address
-    mutating func executeReadModifyWriteAccessOperation(
-        _ op: i6502Specification.Operation
+    func executeReadModifyWriteAccessOperation(
+        _ op: Specification.DecodedInstruction
     ) -> Int {
         let resolvedAddress = fetchAddress(op)
         let (resolvedValue, pageCrossed) = fetchValue(op)
@@ -31,7 +31,7 @@ extension Emulator.StateImage {
         return pageCrossed ? 1 : 0
     }
 
-    fileprivate mutating func executeRol(_ value: UInt8, _ address: UInt16, length: UInt16) {
+    fileprivate func executeRol(_ value: UInt8, _ address: UInt16, length: UInt16) {
         // carry shifts into pos 0, pos 7 shift to carry
         memory[address] = (value << 1) | (registerPS.carry ? 0b1 : 0b0)
 
@@ -42,7 +42,7 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    fileprivate mutating func executeRor(_ value: UInt8, _ address: UInt16, length: UInt16) {
+    fileprivate func executeRor(_ value: UInt8, _ address: UInt16, length: UInt16) {
         // carry shifts into pos 7, pos 0 shift to carry
         memory[address] = (value >> 1) | (registerPS.carry ? 0b1000_0000 : 0b0)
 
@@ -53,7 +53,7 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    fileprivate mutating func executeLsr(_ value: UInt8, _ address: UInt16, length: UInt16) {
+    fileprivate func executeLsr(_ value: UInt8, _ address: UInt16, length: UInt16) {
         memory[address] = value >> 1
 
         registerPS.zero = memory[address] == 0
@@ -63,7 +63,7 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    fileprivate mutating func executeAsl(_ value: UInt8, _ address: UInt16, length: UInt16) {
+    fileprivate func executeAsl(_ value: UInt8, _ address: UInt16, length: UInt16) {
         memory[address] = value << 1
 
         registerPS.zero = memory[address] == 0
@@ -73,10 +73,10 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    fileprivate mutating func executeIncreaseDecrease(
+    fileprivate func executeIncreaseDecrease(
         _ value: UInt8,
         _ address: UInt16,
-        op: i6502Specification.Operation
+        op: Specification.DecodedInstruction
     ) {
         switch op.symbol {
         case .inc:
@@ -90,29 +90,14 @@ extension Emulator.StateImage {
     }
 }
 
-extension Array {
+extension UnsafeMutableBufferPointer {
     fileprivate subscript(_ index: UInt8) -> Element {
         get { self[Int(index)] }
-        set { self[Int(index)] = newValue }
+        nonmutating set { self[Int(index)] = newValue }
     }
 
     fileprivate subscript(_ index: UInt16) -> Element {
         get { self[Int(index)] }
-        set { self[Int(index)] = newValue }
-    }
-}
-
-extension Emulator.StateImage {
-    fileprivate mutating func assign(
-        _ value: UInt8,
-        to keyPath: WritableKeyPath<Emulator.StateImage, UInt8>,
-        length: UInt16
-    ) {
-        self[keyPath: keyPath] = value
-
-        registerPS.zero = value == 0
-        registerPS.negative = Int8(bitPattern: value) < 0
-
-        registerPC += length
+        nonmutating set { self[Int(index)] = newValue }
     }
 }

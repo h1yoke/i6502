@@ -564,6 +564,26 @@ public enum Specification {
         .init(.sty, .absolute): 0x8C
     ]
 
+    public struct DecodedInstruction: Sendable {
+        public let symbol: OperationCode
+        public let mode: AddressingMode
+        public let length: UInt16
+        public let baseTiming: Int
+    }
+
+    public static let decodingTable: [DecodedInstruction?] = {
+        var table = [DecodedInstruction?](repeating: nil, count: 256)
+        for (op, byte) in bytecodes {
+            table[Int(byte)] = DecodedInstruction(
+                symbol: op.symbol,
+                mode: op.mode,
+                length: op.length,
+                baseTiming: op.baseTiming ?? 0
+            )
+        }
+        return table
+    }()
+
     fileprivate static let operations: [UInt8: Operation] =
         Dictionary(uniqueKeysWithValues: bytecodes.map { ($1, $0) })
 

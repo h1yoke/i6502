@@ -2,8 +2,8 @@ import i6502Specification
 
 extension Emulator.StateImage {
     // Executes an operation that resolves operand to a value
-    mutating func executeReadAccessOperation(
-        _ op: i6502Specification.Operation
+    func executeReadAccessOperation(
+        _ op: Specification.DecodedInstruction
     ) -> Int {
         let (resolvedValue, pageCrossed) = fetchValue(op)
 
@@ -33,7 +33,7 @@ extension Emulator.StateImage {
         return pageCrossed ? 1 : 0
     }
 
-    private mutating func executeAdc(_ value: UInt8, length: UInt16) {
+    private func executeAdc(_ value: UInt8, length: UInt16) {
         guard !registerPS.decimal else {
             fatalError("Decimal mode is not supported yet") // TODO: decimal mode
         }
@@ -53,7 +53,7 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    private mutating func executeSbc(_ value: UInt8, length: UInt16) {
+    private func executeSbc(_ value: UInt8, length: UInt16) {
         guard !registerPS.decimal else {
             fatalError("Decimal mode is not supported yet") // TODO: decimal mode
         }
@@ -73,54 +73,72 @@ extension Emulator.StateImage {
         registerPC += length
     }
 
-    private mutating func executeLogic(_ value: UInt8, op: i6502Specification.Operation) {
+    private func executeLogic(_ value: UInt8, op: Specification.DecodedInstruction) {
         switch op.symbol {
         case .and:
-            assign(value & registerA, to: \.registerA, length: op.length)
+            registerA = value & registerA
+            registerPS.zero = registerA == 0
+            registerPS.negative = Int8(bitPattern: registerA) < 0
+            registerPC += op.length
         case .ora:
-            assign(value | registerA, to: \.registerA, length: op.length)
+            registerA = value | registerA
+            registerPS.zero = registerA == 0
+            registerPS.negative = Int8(bitPattern: registerA) < 0
+            registerPC += op.length
         case .eor:
-            assign(value ^ registerA, to: \.registerA, length: op.length)
+            registerA = value ^ registerA
+            registerPS.zero = registerA == 0
+            registerPS.negative = Int8(bitPattern: registerA) < 0
+            registerPC += op.length
         default:
             preconditionFailure("Expected a logic operation")
         }
     }
 
-    private mutating func executeCompare(_ value: UInt8, op: i6502Specification.Operation) {
-        let keyPath: WritableKeyPath<Self, UInt8> = switch op.symbol {
+    private func executeCompare(_ value: UInt8, op: Specification.DecodedInstruction) {
+        let register: UInt8 = switch op.symbol {
         case .cmp:
-            \.registerA
+            registerA
         case .cpx:
-            \.registerX
+            registerX
         case .cpy:
-            \.registerY
+            registerY
         default:
             preconditionFailure("Expected a compare operation")
         }
 
-        let result = self[keyPath: keyPath] &- value
+        let result = register &- value
 
-        registerPS.carry = self[keyPath: keyPath] >= value
-        registerPS.zero = self[keyPath: keyPath] == value
+        registerPS.carry = register >= value
+        registerPS.zero = register == value
         registerPS.negative = Int8(bitPattern: result) < 0
 
         registerPC += op.length
     }
 
-    private mutating func executeLoad(_ value: UInt8, op: i6502Specification.Operation) {
+    private func executeLoad(_ value: UInt8, op: Specification.DecodedInstruction) {
         switch op.symbol {
         case .lda:
-            assign(value, to: \.registerA, length: op.length)
+            registerA = value
+            registerPS.zero = registerA == 0
+            registerPS.negative = Int8(bitPattern: registerA) < 0
+            registerPC += op.length
         case .ldx:
-            assign(value, to: \.registerX, length: op.length)
+            registerX = value
+            registerPS.zero = registerX == 0
+            registerPS.negative = Int8(bitPattern: registerX) < 0
+            registerPC += op.length
         case .ldy:
-            assign(value, to: \.registerY, length: op.length)
+            registerY = value
+            registerPS.zero = registerY == 0
+            registerPS.negative = Int8(bitPattern: registerY) < 0
+            registerPC += op.length
         default:
             preconditionFailure("Expected a load operation")
         }
     }
 
-    private mutating func executeBit(_ value: UInt8, length: UInt16) {
+    private func executeBit(_ value: UInt8, length: UInt16) {
         registerPS.zero = registerA & value == 0
         registerPS.negative = value & 0b1000_0000 != 0
         registerPS.overflow = value & 0b0100_0000 != 0
@@ -138,20 +156,5 @@ extension Array {
     fileprivate subscript(_ index: UInt16) -> Element {
         get { self[Int(index)] }
         set { self[Int(index)] = newValue }
-    }
-}
-
-extension Emulator.StateImage {
-    fileprivate mutating func assign(
-        _ value: UInt8,
-        to keyPath: WritableKeyPath<Emulator.StateImage, UInt8>,
-        length: UInt16
-    ) {
-        self[keyPath: keyPath] = value
-
-        registerPS.zero = value == 0
-        registerPS.negative = Int8(bitPattern: value) < 0
-
-        registerPC += length
     }
 }

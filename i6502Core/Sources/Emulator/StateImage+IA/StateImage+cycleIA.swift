@@ -3,14 +3,12 @@ import i6502Specification
 
 extension Emulator.StateImage {
     // Executes a "leading" cycle of operation and returns cycle length to skip
-    public mutating func cycleInstructionAccurate() throws -> Int {
-        guard let operation = Specification.translate(byte: memory[registerPC]) else {
-            throw EmulatorError.stateCycleError(
-                "Byte \(String(format: "%.2x", Int(memory[registerPC]))) is illegal opcode!"
-            )
-        }
-        guard let baseTiming = operation.baseTiming else {
-            throw EmulatorError.stateCycleError("No base timing for operation '\(operation)'")
+    public func cycleInstructionAccurate() -> Int {
+        guard let operation = Specification.decodingTable[Int(memory[Int(registerPC)])] else {
+            /* throw EmulatorError.stateCycleError(
+                 "Byte \(String(format: "%.2x", Int(memory[Int(registerPC)]))) is illegal opcode!"
+             ) */
+            return 0
         }
 
         let additionalTiming = switch (operation.symbol, operation.mode) {
@@ -37,9 +35,10 @@ extension Emulator.StateImage {
              (.inc, _), (.dec, _):
             executeReadModifyWriteAccessOperation(operation)
         default:
-            throw EmulatorError.stateCycleError("Unknown operation '\(operation)'")
+            // throw EmulatorError.stateCycleError("Unknown operation '\(operation)'")
+            0
         }
-        return baseTiming + additionalTiming
+        return operation.baseTiming + additionalTiming
     }
 }
 

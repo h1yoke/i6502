@@ -1,13 +1,13 @@
 
 extension Emulator {
-    public struct StateImage {
+    public class StateImage {
         public var registerPC: UInt16
         public var registerSP: UInt8
         public var registerA: UInt8
         public var registerX: UInt8
         public var registerY: UInt8
         public var registerPS: ProcessorStatus
-        public var memory: [UInt8] // 64 KiB
+        public let memory: UnsafeMutableBufferPointer<UInt8>
 
         public init(
             registerPC: UInt16,
@@ -24,12 +24,17 @@ extension Emulator {
             self.registerX = registerX
             self.registerY = registerY
             self.registerPS = registerPS
-            self.memory = memory
+
+            let ptr = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: 65_536)
+            for i in 0 ..< 65_536 {
+                ptr[i] = UInt8.random(in: 0 ... 255)
+            }
+            self.memory = ptr
         }
 
-        public init() {
+        public convenience init() {
             self.init(
-                registerPC: 0x0000,
+                registerPC: UInt16.random(in: 0 ... 65_535),
                 registerSP: UInt8.random(in: 0 ... 255),
                 registerA: UInt8.random(in: 0 ... 255),
                 registerX: UInt8.random(in: 0 ... 255),
@@ -41,9 +46,11 @@ extension Emulator {
             // TODO: remove it.
             // temp gimmick to clean monitor memory and force decimal mode off
             //   * should support ADC & SBC in BCD-mode
-            //   * should flush screen in program (boring...) or pretend that monitor can write to memory
-            try? memory.assign(at: 0x200 ... 0x5FF, Array(repeating: 0, count: 1_024))
-            registerSP.decimal = false
+            registerPS.decimal = false
+        }
+
+        deinit {
+            memory.deallocate()
         }
     }
 
@@ -108,7 +115,7 @@ extension Emulator.ProcessorStatus {
         }
     }
 
-    // Intertupt disabled flag:
+    // Interrupt disabled flag:
     // irq is ignored when set
     public var interrupt: Bool {
         get { (self & 0b0000_0100) >> 2 == 1 }
@@ -148,7 +155,7 @@ extension Emulator.ProcessorStatus {
 }
 
 extension Array {
-    fileprivate mutating func assign(at range: ClosedRange<Int>, _ value: [Element?]) throws {
+    private mutating func assign(at range: ClosedRange<Int>, _ value: [Element?]) throws {
         guard range.count == value.count else {
             throw EmulatorError.deviceError(
                 "Device emittable addresses [\(range)] are not compatible with ram [0..65535]"

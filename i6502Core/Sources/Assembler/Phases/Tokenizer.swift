@@ -60,7 +60,7 @@ extension Tokenizer {
 
             } else if let wordDirective = try input.takeWordDirective(defines: defines, cursor: &cursor) {
                 tokens.append(.word(wordDirective))
-                currentAddress += 1
+                currentAddress += 2
 
             } else {
                 let labelDeclaration = try input.processLabelDeclaration(

@@ -1,64 +1,77 @@
+import i6502Assembler
 import i6502Emulator
 import SwiftUI
-import UIKit
 
-// emits a random byte value
-class RandomizerDevice: PluggableDevice {
-    var irqRequired: Bool = false
-    var nmiRequired: Bool = false
+@Observable
+final class EmulationEngine: @unchecked Sendable {
+    private(set) var monitor: [UInt8] = Array(repeating: 0, count: 1_024)
 
-    var addresses: ClosedRange<Int> = 0xFE ... 0xFE
-    var lastEmitted: UInt8 = 0
+    private var emulator: Emulator
+    private let cyclesPerFrame = 16_667
 
-    func emit() -> [UInt8] {
-        lastEmitted = UInt8.random(in: 0 ... 0xFF)
-        return [lastEmitted]
+    private let queue = DispatchQueue(label: "EmulationEngineQueue", qos: .userInteractive)
+    private var timer: DispatchSourceTimer?
+
+    init() {
+        emulator = Emulator(emulationMode: .instructionAccurate, devices: [])
     }
 
-    func recieve(section: [UInt8]) {}
-}
-
-// emits an ASCII value of currently pressed key
-class KeyboardDevice: PluggableDevice {
-    var irqRequired: Bool = false
-    var nmiRequired: Bool = false
-
-    var addresses: ClosedRange<Int> = 0xFF ... 0xFF
-    var pressed: UInt8? = nil
-
-    func emit() -> [UInt8] {
-        [pressed ?? 0]
+    func boot(memory: [UInt8?]) {
+        queue.async { [self] in
+            emulator = Emulator(memory: memory, emulationMode: .instructionAccurate, devices: [])
+            emulator.reset()
+            startLoop()
+        }
     }
 
-    func recieve(section: [UInt8]) {}
+    func reset() {
+        queue.async { [self] in emulator.reset() }
+    }
+
+    func pressKey(_ key: UInt8?) {
+        if let key {
+            emulator.state.memory[0xFF] = key
+        }
+    }
+
+    func startLoop() {
+        stopLoop()
+
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .milliseconds(1))
+        timer.setEventHandler { [self] in
+            for _ in 0 ..< cyclesPerFrame {
+                emulator.cycle()
+            }
+            let newMonitor = Array(emulator.state.memory[0x200 ... 0x5FF])
+            DispatchQueue.main.async { [self] in
+                monitor = newMonitor
+            }
+        }
+        timer.resume()
+
+        self.timer = timer
+    }
+
+    func stopLoop() {
+        timer?.cancel()
+        timer = nil
+    }
 }
 
 struct EmulatorView: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .defaultDark
+    @State private var engine: EmulationEngine
 
-    @State private var monitor: [UInt8]
-    @State private var keyboard: KeyboardDevice
-    @State private var randomizer: RandomizerDevice
-    @State private var emulator: Emulator
+    let codeStorage: CodeStorage
 
-    @State private var boot: Bool = false
-    @State private var clock: Double = 0.7
+    var compiledProgram: Optional<[UInt8?]> {
+        try? Assembler.compileBytes(input: codeStorage.code)
+    }
 
-    @State private var showInspector: Bool = false
-
-    let cyclesPerFrame = 16_667 // 1 MHz
-    let memory: [UInt8?]
-
-    init(memory: [UInt8?]) {
-        self.memory = memory
-
-        monitor = Array(repeating: 0, count: 1_024)
-        keyboard = KeyboardDevice()
-        randomizer = RandomizerDevice()
-        emulator = Emulator(
-            emulationMode: .instructionAccurate,
-            devices: [_randomizer.wrappedValue, _keyboard.wrappedValue]
-        )
+    init(codeStorage: CodeStorage) {
+        self.codeStorage = codeStorage
+        engine = EmulationEngine()
     }
 
     var body: some View {
@@ -72,16 +85,15 @@ struct EmulatorView: View {
             .overlay(alignment: .top) {
                 TimelineView(.animation) { timeline in
                     Canvas { context, _ in
+                        let _ = timeline.date
                         for i in 0 ..< 1_024 {
                             let x = CGFloat(i % 32) * pixelSize
                             let y = CGFloat(i / 32) * pixelSize
                             let rect = CGRect(x: x, y: y, width: pixelSize, height: pixelSize)
-                            let color: Color = monitor[i] != 0
-                                ? Color(red: 28 / 255.0, green: 206 / 255.0, blue: 29 / 255.0)
-                                : Color(red: 2 / 255.0, green: 2 / 255.0, blue: 2 / 255.0)
-
-                            context
-                                .fill(Path(rect), with: .color(color))
+                            let color: Color = engine.monitor[i] != 0
+                                ? Color(red: 28 / 255, green: 206 / 255, blue: 29 / 255)
+                                : Color(red: 2 / 255, green: 2 / 255, blue: 2 / 255)
+                            context.fill(Path(rect), with: .color(color))
                         }
                     }
                     .frame(width: 32 * pixelSize, height: 32 * pixelSize)
@@ -89,50 +101,33 @@ struct EmulatorView: View {
                         ShaderLibrary.phosphorGlow(.float(8), .float(2.2)),
                         maxSampleOffset: CGSize(width: 10, height: 10)
                     )
-                    .colorEffect(
-                        ShaderLibrary.scanlines(.float(8.0), .float(0.2))
-                    )
+                    .colorEffect(ShaderLibrary.scanlines(.float(8.0), .float(0.2)))
                     .distortionEffect(
                         ShaderLibrary.crtDistortion(.boundingRect, .float(0.04)),
                         maxSampleOffset: CGSize(width: 50, height: 50)
                     )
-                    .onChange(of: timeline.date) {
-                        if boot {
-                            emulator = Emulator(
-                                memory: memory,
-                                emulationMode: .instructionAccurate,
-                                devices: [randomizer, keyboard]
-                            )
-                            emulator.reset()
-                            boot = false
-                        } else {
-                            // unthrottling CPU from 60Hz to 1MHz clock rate
-                            for _ in 0 ..< cyclesPerFrame / 80 {
-                                try? emulator.cycle()
-                            }
-                            // updating monitor only in 60Hz
-                            monitor = Array(emulator.state.memory[0x200 ... 0x5FF])
-                        }
-                    }
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                DpadView { keyboard.pressed = $0 }
+                DpadView { engine.pressKey($0) }
                     .frame(width: min(300, minSize / 2), height: min(300, minSize / 2))
                     .padding()
             }
             .overlay(alignment: .bottomTrailing) {
                 ButtonsView(
-                    reset: { emulator.reset() },
-                    action: { boot = true }
+                    reset: {
+                        engine.reset()
+                    },
+                    action: {
+                        if let compiledProgram {
+                            engine.boot(memory: compiledProgram)
+                        }
+                    }
                 )
                 .frame(width: minSize / 3, height: minSize / 4)
                 .padding()
             }
         }
+        .onDisappear { engine.stopLoop() }
     }
-}
-
-#Preview {
-    EmulatorView(memory: [])
 }

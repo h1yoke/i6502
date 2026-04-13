@@ -1,6 +1,6 @@
 
 // Protocol for pluggable devices such as monitors, keyboards, randomizers etc.
-public protocol PluggableDevice {
+public protocol PluggableDevice: Sendable {
     // Device memory section start and end addresses
     var addresses: ClosedRange<Int> { get }
 
@@ -22,7 +22,7 @@ public enum EmulationMode {
     case cycleAccurate
 }
 
-public final class Emulator {
+public struct Emulator {
     public private(set) var emulationMode: EmulationMode
     public private(set) var state: StateImage = .init()
     public private(set) var devices: [PluggableDevice] = []
@@ -33,56 +33,59 @@ public final class Emulator {
         emulationMode: EmulationMode = .instructionAccurate,
         devices: [PluggableDevice]
     ) {
-        try? state.memory.assign(at: 0 ... memory.count - 1, memory)
+        state.memory.assign(at: 0 ... memory.count - 1, memory)
 
         self.emulationMode = emulationMode
         self.devices = devices
     }
 
-    public func cycle() throws {
+    public mutating func cycle() {
         switch emulationMode {
         case .instructionAccurate:
-            try cycleInstructionAccurate()
+            cycleInstructionAccurate()
         case .cycleAccurate:
-            throw EmulatorError.unsupportedEmulationModeError(
-                "Cycle-accurate emulation is not supported for now"
-            )
+            break
         }
     }
 
     // Emulates RESET pin activation
-    public func reset() {
+    public mutating func reset() {
         remainingCycles = state.resetInstructionAccurate()
     }
 
-    private func cycleInstructionAccurate() throws {
-        // handle devices emits
-        for device in devices {
-            try? state.memory.assign(at: device.addresses, device.emit())
+    private mutating func cycleInstructionAccurate() {
+        guard remainingCycles == 0 else {
+            remainingCycles -= 1
+            return
         }
 
+        // handle devices emits
+        /*
+         for device in devices {
+             try? state.memory.assign(at: device.addresses, device.emit())
+         }
+          */
+
         // handle interrupts and operation execution on cycle #1
-        if remainingCycles == 0 {
-            if devices.contains(where: \.nmiRequired) {
-                remainingCycles = state.nmiInstructionAccurate()
-            } else if !state.registerPS.interrupt, devices.contains(where: \.irqRequired) {
-                remainingCycles = state.irqInstructionAccurate()
-            } else {
-                remainingCycles = try state.cycleInstructionAccurate()
-            }
+        if devices.contains(where: \.nmiRequired) {
+            remainingCycles = state.nmiInstructionAccurate()
+        } else if !state.registerPS.interrupt, devices.contains(where: \.irqRequired) {
+            remainingCycles = state.irqInstructionAccurate()
+        } else {
+            remainingCycles = state.cycleInstructionAccurate()
         }
 
         // handle devices recieves
-        for device in devices {
-            guard state.memory.indices.contains(device.addresses) else {
-                throw EmulatorError.deviceError(
-                    "Device recieving addresses [\(device.addresses)] are not compatible with ram [0..65535]"
-                )
-            }
-            device.recieve(section: Array(state.memory[device.addresses]))
-        }
-
-        remainingCycles -= 1
+        /*
+          for device in devices {
+             guard state.memory.indices.contains(device.addresses) else {
+                 throw EmulatorError.deviceError(
+                     "Device recieving addresses [\(device.addresses)] are not compatible with ram [0..65535]"
+                 )
+             }
+             device.recieve(section: Array(state.memory[device.addresses]))
+         }
+          */
     }
 }
 
@@ -92,12 +95,10 @@ public enum EmulatorError: Error {
     case stateCycleError(String)
 }
 
-extension Array {
-    fileprivate mutating func assign(at range: ClosedRange<Int>, _ value: [Element?]) throws {
+extension UnsafeMutableBufferPointer {
+    fileprivate func assign(at range: ClosedRange<Int>, _ value: [Element?]) {
         guard range.count == value.count else {
-            throw EmulatorError.deviceError(
-                "Device emittable addresses [\(range)] are not compatible with ram [0..65535]"
-            )
+            return
         }
         for i in range {
             if let value = value[i - range.lowerBound] {

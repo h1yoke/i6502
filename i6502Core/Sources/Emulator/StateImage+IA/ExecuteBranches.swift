@@ -3,8 +3,8 @@ import i6502Specification
 extension Emulator.StateImage {
     // Executes an operation that moves program counter
     // may use operand as address if necessary
-    mutating func executeBranchesOperation(
-        _ op: i6502Specification.Operation
+    func executeBranchesOperation(
+        _ op: Specification.DecodedInstruction
     ) -> Int {
         let isBranching = switch op.symbol {
         case .bpl:

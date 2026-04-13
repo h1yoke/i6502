@@ -5,6 +5,7 @@ extension View {
     func settingsSheet(isPresented: Binding<Bool>) -> some View {
         sheet(isPresented: isPresented) {
             SettingsView()
+                .frame(minWidth: 500, minHeight: 300)
         }
     }
 }

@@ -3,8 +3,8 @@ import i6502Specification
 extension Emulator.StateImage {
     // Executes an operation that moves program counter
     // may use operand as address if necessary
-    mutating func executeConrolFlowOperation(
-        _ op: i6502Specification.Operation
+    func executeConrolFlowOperation(
+        _ op: Specification.DecodedInstruction
     ) -> Int {
         switch op.symbol {
         case .brk:
@@ -28,7 +28,7 @@ extension Emulator.StateImage {
         return 0
     }
 
-    fileprivate mutating func executeBrk() {
+    fileprivate func executeBrk() {
         // increase program counter by 2
         registerPC += 2
         // push PC to stack
@@ -45,7 +45,7 @@ extension Emulator.StateImage {
         registerPC = UInt16(memory[0xFFFE]) + (UInt16(memory[0xFFFF]) << 8)
     }
 
-    fileprivate mutating func executeRti() {
+    fileprivate func executeRti() {
         // pop P from stack
         registerSP &+= 1
         registerPS = memory[UInt16(registerSP) + 0x100]
@@ -57,7 +57,7 @@ extension Emulator.StateImage {
         registerPC = low + high
     }
 
-    fileprivate mutating func executeRts() {
+    fileprivate func executeRts() {
         // pop PC from stack
         registerSP &+= 1
         let low = UInt16(memory[UInt16(registerSP) + 0x100])
@@ -66,7 +66,7 @@ extension Emulator.StateImage {
         registerPC = low + high + 1
     }
 
-    fileprivate mutating func executeJsr() {
+    fileprivate func executeJsr() {
         let origin = registerPC + 2
 
         // proccess absolute jump
@@ -79,7 +79,7 @@ extension Emulator.StateImage {
         registerSP &-= 1
     }
 
-    fileprivate mutating func executeJmp(_ mode: AddressingMode) {
+    fileprivate func executeJmp(_ mode: AddressingMode) {
         switch mode {
         case .absolute:
             registerPC = fetchAbsoluteJump()
@@ -91,14 +91,14 @@ extension Emulator.StateImage {
     }
 }
 
-extension Array {
+extension UnsafeMutableBufferPointer {
     fileprivate subscript(_ index: UInt8) -> Element {
         get { self[Int(index)] }
-        set { self[Int(index)] = newValue }
+        nonmutating set { self[Int(index)] = newValue }
     }
 
     fileprivate subscript(_ index: UInt16) -> Element {
         get { self[Int(index)] }
-        set { self[Int(index)] = newValue }
+        nonmutating set { self[Int(index)] = newValue }
     }
 }

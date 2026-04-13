@@ -84,9 +84,9 @@ private struct HexdumpView: View {
 
     private func hexDump(_ bytes: [UInt8?], rowSize: Int) -> AttributedString {
         var result = ""
-        for (rowIndex, row) in bytes.chunked(into: 16).enumerated() {
+        for (rowIndex, row) in bytes.chunked(into: rowSize).enumerated() {
             if !row.allSatisfy({ $0 == nil }) {
-                result += String(format: "%.4x: ", rowIndex * 16)
+                result += String(format: "%.4x: ", rowIndex * rowSize)
                 for col in row {
                     if let col {
                         result += String(format: "%.2x ", col)
@@ -142,7 +142,7 @@ extension UIBlurEffect {
 #endif
 
 extension Array {
-    func chunked(into size: Int) -> [[Element]] {
+    fileprivate func chunked(into size: Int) -> [[Element]] {
         stride(from: 0, to: count, by: size).map {
             Array(self[$0 ..< Swift.min($0 + size, count)])
         }
