@@ -1,6 +1,6 @@
 #include "cpu_module.h"
 #include "actions/cpu_actions.h"
-#include "actions/cpu_actions_helper.h"
+#include "actions/cpu_actions_utils.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -89,6 +89,124 @@ CpuCycles cpu_decode(CpuState *state) {
         case 0xA0: return(CpuCycles){
             .actions = { imm_t0, imm_ldy_t1 },
             .count = 2
+        };
+        /* Accumulator mode operations */
+        case 0x0A: return(CpuCycles){
+            .actions = { acc_t0, acc_asl_t1 },
+            .count = 2
+        };
+        case 0x4A: return(CpuCycles){
+            .actions = { acc_t0, acc_lsr_t1 },
+            .count = 2
+        };
+        case 0x2A: return(CpuCycles){
+            .actions = { acc_t0, acc_rol_t1 },
+            .count = 2
+        };
+        case 0x6A: return(CpuCycles){
+            .actions = { acc_t0, acc_ror_t1 },
+            .count = 2
+        };
+        /* Implied operations */
+        case 0x18: return(CpuCycles){
+            .actions = { imp_t0, imp_clc_t1 },
+            .count = 2
+        };
+        case 0x38: return(CpuCycles){
+            .actions = { imp_t0, imp_sec_t1 },
+            .count = 2
+        };
+        case 0x58: return(CpuCycles){
+            .actions = { imp_t0, imp_cli_t1 },
+            .count = 2
+        };
+        case 0x78: return(CpuCycles){
+            .actions = { imp_t0, imp_sei_t1 },
+            .count = 2
+        };
+        case 0xB8: return(CpuCycles){
+            .actions = { imp_t0, imp_clv_t1 },
+            .count = 2
+        };
+        case 0xD8: return(CpuCycles){
+            .actions = { imp_t0, imp_cld_t1 },
+            .count = 2
+        };
+        case 0xF8: return(CpuCycles){
+            .actions = { imp_t0, imp_sed_t1 },
+            .count = 2
+        };
+        case 0xEA: return(CpuCycles){
+            .actions = { imp_t0, imp_nop_t1 },
+            .count = 2
+        };
+        case 0xAA: return(CpuCycles){
+            .actions = { imp_t0, imp_tax_t1 },
+            .count = 2
+        };
+        case 0x8A: return(CpuCycles){
+            .actions = { imp_t0, imp_txa_t1 },
+            .count = 2
+        };
+        case 0xCA: return(CpuCycles){
+            .actions = { imp_t0, imp_dex_t1 },
+            .count = 2
+        };
+        case 0xE8: return(CpuCycles){
+            .actions = { imp_t0, imp_inx_t1 },
+            .count = 2
+        };
+        case 0xA8: return(CpuCycles){
+            .actions = { imp_t0, imp_tay_t1 },
+            .count = 2
+        };
+        case 0x98: return(CpuCycles){
+            .actions = { imp_t0, imp_tya_t1 },
+            .count = 2
+        };
+        case 0x88: return(CpuCycles){
+            .actions = { imp_t0, imp_dey_t1 },
+            .count = 2
+        };
+        case 0xC8: return(CpuCycles){
+            .actions = { imp_t0, imp_iny_t1 },
+            .count = 2
+        };
+        case 0x40: return(CpuCycles){
+            .actions = { imp_t0, imp_rti_t1, imp_rti_t2, imp_rti_t3, imp_rti_t4, imp_rti_t5 },
+            .count = 6
+        };
+        case 0x60: return(CpuCycles){
+            .actions = { imp_t0, imp_rts_t1, imp_rts_t2, imp_rts_t3, imp_rts_t4, imp_rts_t5 },
+            .count = 6
+        };
+        case 0x9A: return(CpuCycles){
+            .actions = { imp_t0, imp_txs_t1 },
+            .count = 2
+        };
+        case 0xBA: return(CpuCycles){
+            .actions = { imp_t0, imp_tsx_t1 },
+            .count = 2
+        };
+        case 0x48: return(CpuCycles){
+            .actions = { imp_t0, imp_pha_t1, imp_pha_t2 },
+            .count = 3
+        };
+        case 0x68: return(CpuCycles){
+            .actions = { imp_t0, imp_pla_t1, imp_pla_t2, imp_pla_t3, },
+            .count = 4
+        };
+        case 0x08: return(CpuCycles){
+            .actions = { imp_t0, imp_php_t1, imp_php_t2 },
+            .count = 3
+        };
+        case 0x28: return(CpuCycles){
+            .actions = { imp_t0, imp_plp_t1, imp_plp_t2, imp_plp_t3 },
+            .count = 4
+        };
+        case 0x00: return(CpuCycles){
+            .actions = { imp_t0, imp_brk_t1, imp_brk_t2, imp_brk_t3, imp_brk_t4, imp_brk_t5, imp_brk_t6 },
+            .count = 7
         };
         /* TODO: rest modes */
     }

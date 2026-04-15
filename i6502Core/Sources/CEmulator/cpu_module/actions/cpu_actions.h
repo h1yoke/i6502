@@ -44,4 +44,58 @@ void imm_lda_t1(CpuState *state);
 void imm_ldx_t1(CpuState *state);
 void imm_ldy_t1(CpuState *state);
 
+/* MARK: - accumulator actions */
+void acc_t0(CpuState *state);
+void acc_asl_t1(CpuState *state);
+void acc_lsr_t1(CpuState *state);
+void acc_rol_t1(CpuState *state);
+void acc_ror_t1(CpuState *state);
+
+/* MARK: - implied actions */
+void imp_t0(CpuState *state);
+void imp_brk_t1(CpuState *state);
+void imp_brk_t2(CpuState *state);
+void imp_brk_t3(CpuState *state);
+void imp_brk_t4(CpuState *state);
+void imp_brk_t5(CpuState *state);
+void imp_brk_t6(CpuState *state);
+void imp_clc_t1(CpuState *state);
+void imp_cli_t1(CpuState *state);
+void imp_clv_t1(CpuState *state);
+void imp_cld_t1(CpuState *state);
+void imp_sec_t1(CpuState *state);
+void imp_sei_t1(CpuState *state);
+void imp_sed_t1(CpuState *state);
+void imp_nop_t1(CpuState *state);
+void imp_tax_t1(CpuState *state);
+void imp_tay_t1(CpuState *state);
+void imp_txa_t1(CpuState *state);
+void imp_tya_t1(CpuState *state);
+void imp_inx_t1(CpuState *state);
+void imp_iny_t1(CpuState *state);
+void imp_dex_t1(CpuState *state);
+void imp_dey_t1(CpuState *state);
+void imp_rti_t1(CpuState *state);
+void imp_rti_t2(CpuState *state);
+void imp_rti_t3(CpuState *state);
+void imp_rti_t4(CpuState *state);
+void imp_rti_t5(CpuState *state);
+void imp_rts_t1(CpuState *state);
+void imp_rts_t2(CpuState *state);
+void imp_rts_t3(CpuState *state);
+void imp_rts_t4(CpuState *state);
+void imp_rts_t5(CpuState *state);
+void imp_txs_t1(CpuState *state);
+void imp_tsx_t1(CpuState *state);
+void imp_pha_t1(CpuState *state);
+void imp_pha_t2(CpuState *state);
+void imp_php_t1(CpuState *state);
+void imp_php_t2(CpuState *state);
+void imp_pla_t1(CpuState *state);
+void imp_pla_t2(CpuState *state);
+void imp_pla_t3(CpuState *state);
+void imp_plp_t1(CpuState *state);
+void imp_plp_t2(CpuState *state);
+void imp_plp_t3(CpuState *state);
+
 #endif /* __cpu_actions_h_ */

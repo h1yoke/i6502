@@ -1,5 +1,5 @@
 #include "cpu_actions.h"
-#include "cpu_actions_helper.h"
+#include "cpu_actions_utils.h"
 #include "cpu_module.h"
 #include "bus_module.h"
 
@@ -8,12 +8,10 @@
 /* MARK: - NMI cycles */
 
 void nmi_t0(CpuState *state) {
-    /* dummy M[PC] fetch */
     (void)bus_read(state->bus, state->register_pc);
 }
 
 void nmi_t1(CpuState *state) {
-    /* dummy M[PC + 1] fetch */
     (void)bus_read(state->bus, state->register_pc + 1);
 }
 
@@ -54,29 +52,24 @@ void nmi_t6(CpuState *state) {
 /* MARK: - RESET cycles */
 
 void reset_t0(CpuState *state) {
-    /* dummy M[PC] fetch */
     (void)bus_read(state->bus, state->register_pc);
 }
 
 void reset_t1(CpuState *state) {
-    /* dummy M[PC + 1] fetch */
     (void)bus_read(state->bus, state->register_pc + 1);
 }
 
 void reset_t2(CpuState *state) {
-    /* dummy stack read + push */
     (void)bus_read(state->bus, 0x100 + state->register_sp);
     state->register_sp--;
 }
 
 void reset_t3(CpuState *state) {
-    /* dummy stack read + push */
     (void)bus_read(state->bus, 0x100 + state->register_sp);
     state->register_sp--;
 }
 
 void reset_t4(CpuState *state) {
-    /* dummy stack read + push */
     (void)bus_read(state->bus, 0x100 + state->register_sp);
     state->register_sp--;
 }
@@ -97,12 +90,10 @@ void reset_t6(CpuState *state) {
 /* MARK: - IRQ cycles */
 
 void irq_t0(CpuState *state) {
-    /* dummy M[PC] fetch */
     (void)bus_read(state->bus, state->register_pc);
 }
 
 void irq_t1(CpuState *state) {
-    /* dummy M[PC + 1] fetch */
     (void)bus_read(state->bus, state->register_pc + 1);
 }
 

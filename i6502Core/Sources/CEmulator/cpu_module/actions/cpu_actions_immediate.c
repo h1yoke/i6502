@@ -1,5 +1,5 @@
 #include "cpu_actions.h"
-#include "cpu_actions_helper.h"
+#include "cpu_actions_utils.h"
 #include "cpu_module.h"
 #include "bus_module.h"
 
