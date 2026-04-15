@@ -13,12 +13,12 @@ final class EmulationEngine: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
 
     init() {
-        emulator = Emulator(emulationMode: .instructionAccurate, devices: [])
+        emulator = Emulator()
     }
 
     func boot(memory: [UInt8?]) {
         queue.async { [self] in
-            emulator = Emulator(memory: memory, emulationMode: .instructionAccurate, devices: [])
+            emulator.write(memory: memory)
             emulator.reset()
             startLoop()
         }
@@ -29,9 +29,7 @@ final class EmulationEngine: @unchecked Sendable {
     }
 
     func pressKey(_ key: UInt8?) {
-        if let key {
-            emulator.state.memory[0xFF] = key
-        }
+        emulator.write(key, at: 0xFF)
     }
 
     func startLoop() {
@@ -43,7 +41,7 @@ final class EmulationEngine: @unchecked Sendable {
             for _ in 0 ..< cyclesPerFrame {
                 emulator.cycle()
             }
-            let newMonitor = Array(emulator.state.memory[0x200 ... 0x5FF])
+            let newMonitor = emulator.read(at: 0x200 ..< 0x600)
             DispatchQueue.main.async { [self] in
                 monitor = newMonitor
             }
