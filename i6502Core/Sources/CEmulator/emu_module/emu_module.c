@@ -2,6 +2,7 @@
 #include "emu_module.h"
 #include "bus_module.h"
 #include "cpu_module.h"
+#include "actions/cpu_actions_utils.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -15,6 +16,9 @@ EmulatorState * emu_create() {
 
     srand((unsigned)time(NULL));
 
+    state->nmi_pending = false;
+    state->irq_pending = false;
+
     state->bus = bus_create();
     state->cpu = cpu_create();
 
@@ -22,6 +26,7 @@ EmulatorState * emu_create() {
         if (state->cpu) { cpu_destroy(state->cpu); }
         if (state->bus) { bus_destroy(state->bus); }
         free(state);
+        return NULL;
     }
 
     state->cpu->bus = state->bus;
@@ -47,16 +52,21 @@ void emu_reset(EmulatorState *state) {
 }
 
 void emu_cycle(EmulatorState *state) {
-    if (state->cpu_cycles_index < state->cpu_cycles.count) {
+    if (state->cpu_cycles_index < state->cpu_cycles.count || state->cpu->page_crossed) {
         CpuAction cpu_action = state->cpu_cycles.actions[state->cpu_cycles_index];
 
         cpu_action(state->cpu);
         state->cpu_cycles_index++;
     } else {
-        /* TODO: nmi and irq goes here */
-
-        state->cpu_cycles = cpu_decode(state->cpu);
-        state->cpu_cycles_index = 0;
+        if (state->nmi_pending) {
+            state->nmi_pending = false;
+            cpu_nmi(state->cpu);
+        } else if (state->irq_pending && !(state->cpu->register_ps & I_MASK)) {
+            cpu_irq(state->cpu);
+        } else {
+            state->cpu_cycles = cpu_decode(state->cpu);
+            state->cpu_cycles_index = 0;
+        }
     }
 }
 
@@ -68,4 +78,12 @@ uint8_t emu_read(EmulatorState *state, uint16_t address) {
 
 void emu_write(EmulatorState *state, uint16_t address, uint8_t value) {
     bus_write(state->bus, address, value);
+}
+
+void emu_irq_line(EmulatorState *state, bool is_on) {
+    state->irq_pending = is_on;
+}
+
+void emu_nmi_line(EmulatorState *state, bool is_on) {
+    state->nmi_pending = is_on;
 }

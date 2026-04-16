@@ -3,6 +3,7 @@
 
 #include "bus_module.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 /* 6502 state */
 typedef struct {
@@ -16,6 +17,7 @@ typedef struct {
 
     uint8_t data_latch;
     uint16_t address_latch;
+    bool page_crossed;
 } CpuState;
 
 /* 6502 operation (like read, write, ALU, ..) */

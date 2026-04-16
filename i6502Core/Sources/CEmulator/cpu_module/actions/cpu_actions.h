@@ -30,6 +30,32 @@ void nmi_t4(CpuState *state);
 void nmi_t5(CpuState *state);
 void nmi_t6(CpuState *state);
 
+/* MARK: - common actions */
+uint8_t fetch_t0(CpuState *state);
+void com_lda(CpuState *state);
+void com_ldx(CpuState *state);
+void com_ldy(CpuState *state);
+void com_adc(CpuState *state);
+void com_sbc(CpuState *state);
+void com_and(CpuState *state);
+void com_ora(CpuState *state);
+void com_eor(CpuState *state);
+void com_bit(CpuState *state);
+void com_cmp(CpuState *state);
+void com_cpx(CpuState *state);
+void com_cpy(CpuState *state);
+void com_sta(CpuState *state);
+void com_stx(CpuState *state);
+void com_sty(CpuState *state);
+void com_asl(CpuState *state);
+void com_lsr(CpuState *state);
+void com_rol(CpuState *state);
+void com_ror(CpuState *state);
+void com_inc(CpuState *state);
+void com_dec(CpuState *state);
+void com_rmw_0(CpuState *state);
+void com_rmw_1(CpuState *state);
+
 /* MARK: - immediate actions */
 void imm_adc_t1(CpuState *state);
 void imm_sbc_t1(CpuState *state);
@@ -97,28 +123,67 @@ void imp_plp_t3(CpuState *state);
 
 /* MARK: - zero page actions */
 void zp_t1(CpuState *state);
-void zp_lda_t2(CpuState *state);
-void zp_ldx_t2(CpuState *state);
-void zp_ldy_t2(CpuState *state);
-void zp_adc_t2(CpuState *state);
-void zp_sbc_t2(CpuState *state);
-void zp_and_t2(CpuState *state);
-void zp_ora_t2(CpuState *state);
-void zp_eor_t2(CpuState *state);
-void zp_bit_t2(CpuState *state);
-void zp_cmp_t2(CpuState *state);
-void zp_cpx_t2(CpuState *state);
-void zp_cpy_t2(CpuState *state);
-void zp_sta_t2(CpuState *state);
-void zp_stx_t2(CpuState *state);
-void zp_sty_t2(CpuState *state);
-void zp_rmw_t2(CpuState *state);
-void zp_rmw_t4(CpuState *state);
-void zp_asl_t3(CpuState *state);
-void zp_lsr_t3(CpuState *state);
-void zp_rol_t3(CpuState *state);
-void zp_ror_t3(CpuState *state);
-void zp_inc_t3(CpuState *state);
-void zp_dec_t3(CpuState *state);
+void zpx_t2(CpuState *state);
+void zpy_t2(CpuState *state);
+
+/* MARK: - absolute actions */
+void abs_t1(CpuState *state);
+void abs_t2(CpuState *state);
+void abs_jmp_t2(CpuState *state);
+void abs_jsr_t2(CpuState *state) ;
+void abs_jsr_t3(CpuState *state);
+void abs_jsr_t4(CpuState *state);
+void abs_jsr_t5(CpuState *state);
+
+void abx_rmw_t3(CpuState *state);
+void aby_rmw_t3(CpuState *state);
+
+void abx_adc_t3(CpuState *state);
+void abx_and_t3(CpuState *state);
+void abx_cmp_t3(CpuState *state);
+void abx_eor_t3(CpuState *state);
+void abx_lda_t3(CpuState *state);
+void abx_ldy_t3(CpuState *state);
+void abx_ora_t3(CpuState *state);
+void abx_sbc_t3(CpuState *state);
+
+void aby_adc_t3(CpuState *state);
+void aby_and_t3(CpuState *state);
+void aby_cmp_t3(CpuState *state);
+void aby_eor_t3(CpuState *state);
+void aby_lda_t3(CpuState *state);
+void aby_ldx_t3(CpuState *state);
+void aby_ora_t3(CpuState *state);
+void aby_sbc_t3(CpuState *state);
+
+/* MARK: - indirect actions */
+void ind_jmp_t1(CpuState *state);
+void ind_jmp_t2(CpuState *state);
+void ind_jmp_t4(CpuState *state);
+void ind_t3(CpuState *state);
+void inx_t4(CpuState *state);
+void iny_t2(CpuState *state);
+void iny_t3(CpuState *state);
+void iny_adc_t4(CpuState *state);
+void iny_and_t4(CpuState *state);
+void iny_cmp_t4(CpuState *state);
+void iny_eor_t4(CpuState *state);
+void iny_lda_t4(CpuState *state);
+void iny_ora_t4(CpuState *state);
+void iny_sbc_t4(CpuState *state);
+void iny_sta_t4(CpuState *state);
+void iny_sta_t5(CpuState *state);
+
+/* MARK: - relative actions */
+void rel_bpl_t1(CpuState *state);
+void rel_bmi_t1(CpuState *state);
+void rel_bvc_t1(CpuState *state);
+void rel_bvs_t1(CpuState *state);
+void rel_bcc_t1(CpuState *state);
+void rel_bcs_t1(CpuState *state);
+void rel_bne_t1(CpuState *state);
+void rel_beq_t1(CpuState *state);
+void rel_t2(CpuState *state);
+void rel_t3(CpuState *state);
 
 #endif /* __cpu_actions_h_ */

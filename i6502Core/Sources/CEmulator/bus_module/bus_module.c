@@ -18,13 +18,3 @@ BusState * bus_create() {
 void bus_destroy(BusState *state) {
     free(state);
 }
-
-/* MARK: - Bus actions */
-
-uint8_t bus_read(BusState *state, uint16_t address) {
-    return state->ram[address];
-}
-
-void bus_write(BusState *state, uint16_t address, uint8_t value) {
-    state->ram[address] = value;
-}

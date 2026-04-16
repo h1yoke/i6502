@@ -21,6 +21,14 @@ public class Emulator {
         emu_cycle(state)
     }
 
+    public func nmi(_ isOn: Bool) {
+        emu_nmi_line(state, isOn)
+    }
+
+    public func irq(_ isOn: Bool) {
+        emu_irq_line(state, isOn)
+    }
+
     public func read(at address: UInt16) -> UInt8 {
         emu_read(state, address)
     }

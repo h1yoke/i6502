@@ -32,7 +32,8 @@ let package = Package(
                 .headerSearchPath("cpu_module"),
                 .headerSearchPath("bus_module"),
                 .headerSearchPath("emu_module"),
-                .unsafeFlags(["-O2"])
+                .unsafeFlags(["-Og"], .when(configuration: .debug)),
+                .unsafeFlags(["-O2"], .when(configuration: .release))
             ]
         ),
         .target(

@@ -4,15 +4,19 @@
 #include "cpu_module.h"
 #include "bus_module.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+
 /* Emulator state */
-typedef struct EmuState {
+struct EmuState {
     CpuState *cpu;
     BusState *bus;
 
-    /* Cycles that are left to execute
-       after last opcode dispatch */
+    bool nmi_pending;
+    bool irq_pending;
+
     CpuCycles cpu_cycles;
     uint8_t cpu_cycles_index;
-} EmuState;
+};
 
 #endif /* __emu_module_h_ */
